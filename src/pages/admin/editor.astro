@@ -1,0 +1,768 @@
+---
+export const prerender = false;
+
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+
+const cookie = Astro.cookies.get("admin_token");
+if (!cookie?.value || cookie.value !== import.meta.env.ADMIN_TOKEN) {
+  return Astro.redirect("/admin");
+}
+
+const slug = Astro.url.searchParams.get("slug") ?? "";
+const ext = Astro.url.searchParams.get("ext") ?? "md";
+const saved = Astro.url.searchParams.get("saved") === "1";
+const saveError = Astro.url.searchParams.get("error");
+
+let initialTitle = "";
+let initialDescription = "";
+let initialTags = "";
+let initialDraft = false;
+let initialCreatedAt = "";
+let initialBody = "";
+
+if (slug) {
+  const postsDir = join(process.cwd(), "src", "content", "posts");
+  let content = "";
+  try {
+    content = await readFile(join(postsDir, `${slug}.${ext}`), "utf-8");
+  } catch {
+    return Astro.redirect("/admin/dashboard?error=notfound");
+  }
+
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (fmMatch) {
+    const fm = fmMatch[1];
+    initialBody = fmMatch[2].trimStart();
+    initialTitle = fm.match(/^title:\s*["']?(.*?)["']?\s*$/m)?.[1] ?? "";
+    initialDescription = fm.match(/^description:\s*["']?(.*?)["']?\s*$/m)?.[1] ?? "";
+    initialDraft = fm.match(/^draft:\s*(.+?)\s*$/m)?.[1] === "true";
+    initialCreatedAt = fm.match(/^createdAt:\s*(.+?)\s*$/m)?.[1] ?? "";
+    const tagsSection = fm.match(/^tags:\n((?:[ \t]+-[ \t]+.+\n?)+)/m);
+    if (tagsSection) {
+      const tagLines = tagsSection[1].match(/^[ \t]+-[ \t]+(.+)$/mg) ?? [];
+      initialTags = tagLines.map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).join(", ");
+    }
+  } else {
+    initialBody = content;
+  }
+}
+
+const now = new Date();
+const mm = String(now.getMonth() + 1).padStart(2, "0");
+const dd = String(now.getDate()).padStart(2, "0");
+const todayDate = `${mm}-${dd}-${now.getFullYear()}`;
+const createdAt = initialCreatedAt || todayDate;
+
+function makeSlug(title: string) {
+  return title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+}
+
+const initialSlug = slug || makeSlug(initialTitle);
+---
+
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{slug ? `수정: ${initialTitle}` : "새 포스트"} — Admin</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        height: 100%;
+        background: #0d0d0d;
+        color: #e5e5e5;
+        font-family: 'GeistMono', 'Courier New', monospace;
+        overflow: hidden;
+      }
+
+      .app {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* ── Header ── */
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 0 1.25rem;
+        height: 52px;
+        background: #111;
+        border-bottom: 1px solid #1e1e1e;
+        flex-shrink: 0;
+      }
+
+      .header-left { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+
+      .back-link {
+        color: #555;
+        text-decoration: none;
+        font-size: 0.8rem;
+        white-space: nowrap;
+        transition: color 0.15s;
+      }
+      .back-link:hover { color: #e5e5e5; }
+
+      .divider { color: #2a2a2a; }
+
+      .slug-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: #555;
+        font-size: 0.75rem;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .slug-label { white-space: nowrap; }
+
+      #slug-display {
+        color: #888;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 200px;
+      }
+
+      .header-right { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
+
+      .draft-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.8rem;
+        color: #888;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .draft-toggle input { display: none; }
+
+      .toggle-track {
+        width: 32px; height: 18px;
+        background: #2a2a2a;
+        border-radius: 9px;
+        position: relative;
+        transition: background 0.2s;
+      }
+
+      .toggle-thumb {
+        width: 12px; height: 12px;
+        background: #555;
+        border-radius: 50%;
+        position: absolute;
+        top: 3px; left: 3px;
+        transition: all 0.2s;
+      }
+
+      .draft-toggle input:checked ~ .toggle-track { background: #78350f; }
+      .draft-toggle input:checked ~ .toggle-track .toggle-thumb { left: 17px; background: #f59e0b; }
+
+      .saved-badge {
+        font-size: 0.75rem;
+        color: #4ade80;
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .saved-badge.visible { opacity: 1; }
+
+      .unsaved-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #f59e0b;
+        display: none;
+      }
+      .unsaved-dot.visible { display: inline-block; }
+
+      .btn-save {
+        padding: 0.35rem 1rem;
+        background: #22c55e;
+        color: #000;
+        border: none;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn-save:hover { background: #4ade80; }
+
+      .btn-settings {
+        padding: 0.35rem 0.6rem;
+        background: transparent;
+        color: #555;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.15s;
+      }
+      .btn-settings:hover { color: #e5e5e5; border-color: #555; }
+
+      /* ── Settings panel ── */
+      .settings-panel {
+        background: #0f0f0f;
+        border-bottom: 1px solid #1e1e1e;
+        padding: 1rem 1.5rem;
+        display: none;
+        gap: 1rem;
+        flex-direction: column;
+        flex-shrink: 0;
+      }
+
+      .settings-panel.open { display: flex; }
+
+      .settings-row { display: flex; gap: 1rem; }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        flex: 1;
+      }
+
+      .field label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #555;
+      }
+
+      .field input {
+        background: #0d0d0d;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        color: #e5e5e5;
+        font-family: inherit;
+        font-size: 0.85rem;
+        padding: 0.45rem 0.65rem;
+        outline: none;
+        width: 100%;
+        transition: border-color 0.15s;
+      }
+
+      .field input:focus { border-color: #22c55e; }
+
+      /* ── Main editor area ── */
+      .editor-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .title-area {
+        padding: 1rem 1.5rem 0.75rem;
+        border-bottom: 1px solid #1a1a1a;
+        flex-shrink: 0;
+      }
+
+      #title-input {
+        width: 100%;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #e5e5e5;
+        font-family: inherit;
+        font-size: 1.6rem;
+        font-weight: 600;
+        resize: none;
+        line-height: 1.3;
+        overflow: hidden;
+      }
+
+      #title-input::placeholder { color: #333; }
+
+      .tags-row {
+        padding: 0.6rem 1.5rem;
+        border-bottom: 1px solid #1a1a1a;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .tags-label {
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #444;
+        white-space: nowrap;
+      }
+
+      #tags-input {
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #888;
+        font-family: inherit;
+        font-size: 0.8rem;
+        width: 100%;
+      }
+
+      #tags-input::placeholder { color: #333; }
+
+      /* ── Split pane ── */
+      .split {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        min-height: 0;
+      }
+
+      .editor-pane {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        border-right: 1px solid #1a1a1a;
+        overflow: hidden;
+      }
+
+      .pane-label {
+        padding: 0.35rem 1rem;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #333;
+        border-bottom: 1px solid #151515;
+        flex-shrink: 0;
+      }
+
+      #body-textarea {
+        flex: 1;
+        width: 100%;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #c5c5c5;
+        font-family: 'GeistMono', 'Courier New', monospace;
+        font-size: 0.875rem;
+        line-height: 1.7;
+        padding: 1.25rem 1.5rem;
+        resize: none;
+        overflow-y: auto;
+      }
+
+      .preview-pane {
+        flex: 1;
+        min-width: 0;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .preview-content {
+        flex: 1;
+        padding: 1.25rem 2rem;
+        font-family: 'Geist', 'GeistMono', sans-serif;
+        font-size: 0.9rem;
+        line-height: 1.7;
+        color: #c5c5c5;
+        min-height: 100%;
+      }
+
+      /* Preview typography */
+      .preview-content h1 { font-size: 1.6em; color: #e5e5e5; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+      .preview-content h2 { font-size: 1.3em; color: #e5e5e5; margin-top: 1.5rem; margin-bottom: 0.4rem; border-bottom: 1px solid #1e1e1e; padding-bottom: 0.3rem; }
+      .preview-content h3 { font-size: 1.1em; color: #e5e5e5; margin-top: 1.25rem; margin-bottom: 0.3rem; }
+      .preview-content p { margin-top: 0.75rem; }
+      .preview-content a { color: #4ade80; text-decoration: none; }
+      .preview-content a:hover { text-decoration: underline; }
+      .preview-content code { background: #1e1e1e; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.875em; color: #e5e5e5; }
+      .preview-content pre { background: #151515; border: 1px solid #1e1e1e; border-radius: 6px; padding: 1rem; overflow-x: auto; margin-top: 0.75rem; }
+      .preview-content pre code { background: none; padding: 0; }
+      .preview-content blockquote { border-left: 2px solid #22c55e; padding: 0.5rem 1rem; margin-left: 0; background: rgba(34,197,94,0.07); }
+      .preview-content ul, .preview-content ol { padding-left: 1.5rem; margin-top: 0.5rem; }
+      .preview-content li { margin-top: 0.25rem; }
+      .preview-content hr { border: none; height: 1px; background: #1e1e1e; margin: 1.5rem 0; }
+      .preview-content table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+      .preview-content th, .preview-content td { padding: 0.4rem 0.75rem; border: 1px solid #1e1e1e; }
+      .preview-content th { background: #151515; color: #e5e5e5; }
+
+      .preview-empty {
+        color: #333;
+        font-size: 0.8rem;
+        padding: 1.25rem 2rem;
+      }
+
+      .error-banner {
+        padding: 0.5rem 1.25rem;
+        font-size: 0.8rem;
+        color: #f87171;
+        background: #1a0a0a;
+        border-bottom: 1px solid #7f1d1d;
+        flex-shrink: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <form id="post-form" method="POST" action="/api/admin/save">
+        <input type="hidden" name="original_slug" value={slug} />
+        <input type="hidden" name="ext" value={ext} />
+        <input type="hidden" name="created_at" value={createdAt} id="created-at-field" />
+
+        <header>
+          <div class="header-left">
+            <a href="/admin/dashboard" class="back-link">← 목록</a>
+            <span class="divider">|</span>
+            <div class="slug-wrap">
+              <span class="slug-label">slug:</span>
+              <span id="slug-display">{initialSlug || "제목을 입력하세요"}</span>
+              <input type="hidden" name="slug" id="slug-field" value={initialSlug} />
+            </div>
+          </div>
+
+          <div class="header-right">
+            {saveError && <span style="font-size:0.75rem;color:#f87171;">저장 실패</span>}
+            <span class="saved-badge" id="saved-badge">✓ 저장됨</span>
+            <span class="unsaved-dot" id="unsaved-dot"></span>
+
+            <button type="button" class="btn-settings" id="settings-btn">⚙</button>
+
+            <label class="draft-toggle" title="Draft로 저장">
+              <input type="checkbox" name="draft" id="draft-cb" checked={initialDraft} />
+              <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              <span id="draft-label">{initialDraft ? "Draft" : "Published"}</span>
+            </label>
+
+            <button type="submit" class="btn-save">저장하기</button>
+          </div>
+        </header>
+
+        <div class="settings-panel" id="settings-panel">
+          <div class="settings-row">
+            <div class="field">
+              <label for="image-input">이미지 경로 (선택)</label>
+              <input type="text" id="image-input" name="image_path" placeholder="../assets/my-image.png" />
+            </div>
+          </div>
+        </div>
+
+        {saveError && saveError !== "" && (
+          <div class="error-banner">저장 중 오류가 발생했습니다: {saveError}</div>
+        )}
+
+        <div class="editor-main">
+          <div class="title-area">
+            <textarea
+              id="title-input"
+              name="title"
+              rows={1}
+              placeholder="제목을 입력하세요"
+            >{initialTitle}</textarea>
+          </div>
+
+          <div class="tags-row">
+            <span class="tags-label">Tags</span>
+            <input
+              type="text"
+              id="tags-input"
+              name="tags"
+              value={initialTags}
+              placeholder="guide, tutorial, ... (쉼표로 구분)"
+            />
+          </div>
+
+          <div class="tags-row">
+            <span class="tags-label">Desc</span>
+            <input
+              type="text"
+              id="desc-input"
+              name="description"
+              value={initialDescription}
+              placeholder="포스트에 대한 짧은 설명"
+            />
+          </div>
+
+          <div class="split">
+            <div class="editor-pane">
+              <div class="pane-label">Markdown</div>
+              <textarea
+                id="body-textarea"
+                name="body"
+                placeholder="마크다운으로 작성하세요..."
+                spellcheck="false"
+              >{initialBody}</textarea>
+            </div>
+
+            <div class="preview-pane">
+              <div class="pane-label">Preview</div>
+              <div class="preview-content" id="preview-content">
+                {!initialBody && <p class="preview-empty">내용을 입력하면 미리보기가 표시됩니다.</p>}
+              </div>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <script define:vars={{ isNewPost: !slug, currentSlug: initialSlug }}>
+      // ── Markdown Renderer (CDN 불필요, GitHub Alert 지원) ──
+      const mdRender = (() => {
+        function esc(s) {
+          return String(s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function inline(s) {
+          return s
+            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
+              `<img src="${src}" alt="${esc(alt)}" style="max-width:100%">`)
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) =>
+              `<a href="${href}" target="_blank" rel="noopener">${text}</a>`)
+            .replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+            .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
+            .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+            .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+            .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
+            .replace(/`([^`]+)`/g, (_, c) => `<code>${esc(c)}</code>`);
+        }
+
+        const ALERTS = {
+          NOTE:      { color: '#58a6ff', border: '#1f6feb', icon: '💬' },
+          TIP:       { color: '#3fb950', border: '#238636', icon: '💡' },
+          IMPORTANT: { color: '#bc8cff', border: '#8957e5', icon: '🔔' },
+          WARNING:   { color: '#d29922', border: '#9e6a03', icon: '⚠️' },
+          CAUTION:   { color: '#f85149', border: '#da3633', icon: '🚨' },
+        };
+
+        function hexToRgb(hex) {
+          const n = parseInt(hex.replace('#',''), 16);
+          return [(n>>16)&255, (n>>8)&255, n&255].join(',');
+        }
+
+        function blocks(src) {
+          const lines = src.replace(/\r\n/g, '\n').split('\n');
+          const out = [];
+          let i = 0;
+          while (i < lines.length) {
+            const line = lines[i];
+            if (!line.trim()) { i++; continue; }
+
+            // Fenced code block
+            const fenceM = line.match(/^(`{3,}|~{3,})\s*(\w*)/);
+            if (fenceM) {
+              const fence = fenceM[1], lang = fenceM[2] || '';
+              const code = [];
+              i++;
+              while (i < lines.length && !lines[i].startsWith(fence)) {
+                code.push(esc(lines[i])); i++;
+              }
+              i++;
+              out.push(`<pre><code class="lang-${lang}">${code.join('\n')}</code></pre>`);
+              continue;
+            }
+
+            // Heading
+            const hM = line.match(/^(#{1,6})\s+(.+)$/);
+            if (hM) {
+              const lvl = hM[1].length;
+              out.push(`<h${lvl}>${inline(hM[2])}</h${lvl}>`);
+              i++; continue;
+            }
+
+            // HR
+            if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
+              out.push('<hr>'); i++; continue;
+            }
+
+            // Blockquote / GitHub Alert
+            if (/^>\s?/.test(line)) {
+              const qLines = [];
+              while (i < lines.length && /^>\s?/.test(lines[i])) {
+                qLines.push(lines[i].replace(/^>\s?/, '')); i++;
+              }
+              const qText = qLines.join('\n');
+              const alertM = qText.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\n?([\s\S]*)$/i);
+              if (alertM) {
+                const type = alertM[1].toUpperCase();
+                const a = ALERTS[type];
+                const body = alertM[2].trim();
+                const bodyHtml = body ? (blocks(body) || `<p>${inline(body)}</p>`) : '';
+                out.push(
+                  `<div style="border-left:4px solid ${a.border};border-radius:0 6px 6px 0;padding:0.6rem 1rem;margin:1rem 0;background:rgba(${hexToRgb(a.border)},0.1)">` +
+                  `<div style="font-weight:700;color:${a.color};margin-bottom:0.3rem;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em">${a.icon} ${type}</div>` +
+                  `<div style="color:#c5c5c5">${bodyHtml}</div>` +
+                  `</div>`
+                );
+              } else {
+                out.push(`<blockquote>${blocks(qText)}</blockquote>`);
+              }
+              continue;
+            }
+
+            // Unordered list
+            if (/^[-*+]\s/.test(line)) {
+              const items = [];
+              while (i < lines.length && /^[-*+]\s/.test(lines[i])) {
+                items.push(`<li>${inline(lines[i].replace(/^[-*+]\s+/, ''))}</li>`); i++;
+              }
+              out.push(`<ul>${items.join('')}</ul>`); continue;
+            }
+
+            // Ordered list
+            if (/^\d+\.\s/.test(line)) {
+              const items = [];
+              while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
+                items.push(`<li>${inline(lines[i].replace(/^\d+\.\s+/, ''))}</li>`); i++;
+              }
+              out.push(`<ol>${items.join('')}</ol>`); continue;
+            }
+
+            // Table
+            if (line.includes('|') && i + 1 < lines.length && /^[|\s:—-]+$/.test(lines[i+1])) {
+              const rows = [];
+              while (i < lines.length && lines[i].includes('|')) {
+                rows.push(lines[i].replace(/^\||\|$/g,'').split('|').map(c => c.trim())); i++;
+              }
+              if (rows.length >= 2) {
+                const head = rows[0].map(h => `<th>${inline(h)}</th>`).join('');
+                const body = rows.slice(2).map(r =>
+                  '<tr>' + r.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>'
+                ).join('');
+                out.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`);
+              }
+              continue;
+            }
+
+            // Paragraph
+            const pLines = [];
+            while (i < lines.length && lines[i].trim() &&
+                   !/^#{1,6}\s/.test(lines[i]) &&
+                   !/^>\s?/.test(lines[i]) &&
+                   !/^(`{3,}|~{3,})/.test(lines[i]) &&
+                   !/^[-*+]\s/.test(lines[i]) &&
+                   !/^\d+\.\s/.test(lines[i]) &&
+                   !/^(-{3,}|\*{3,}|_{3,})$/.test(lines[i].trim())) {
+              pLines.push(lines[i]); i++;
+            }
+            if (pLines.length) {
+              out.push(`<p>${inline(pLines.join('\n').replace(/\n/g, '<br>'))}</p>`);
+            }
+          }
+          return out.join('');
+        }
+
+        return { parse: blocks };
+      })();
+
+      // ── Editor Init ──
+      function initEditor() {
+        const titleEl    = document.getElementById('title-input');
+        const bodyEl     = document.getElementById('body-textarea');
+        const previewEl  = document.getElementById('preview-content');
+        const slugDisplay = document.getElementById('slug-display');
+        const slugField   = document.getElementById('slug-field');
+        const draftCb    = document.getElementById('draft-cb');
+        const draftLabel = document.getElementById('draft-label');
+        const savedBadge = document.getElementById('saved-badge');
+        const unsavedDot = document.getElementById('unsaved-dot');
+        const settingsBtn  = document.getElementById('settings-btn');
+        const settingsPanel = document.getElementById('settings-panel');
+
+        // 저장 완료 배지
+        if (new URLSearchParams(window.location.search).get('saved') === '1') {
+          savedBadge.classList.add('visible');
+          setTimeout(() => savedBadge.classList.remove('visible'), 3000);
+        }
+
+        let isDirty = false;
+        function markDirty() {
+          if (!isDirty) {
+            isDirty = true;
+            unsavedDot.classList.add('visible');
+            savedBadge.classList.remove('visible');
+          }
+        }
+
+        // 제목 auto-resize
+        function resizeTitle() {
+          titleEl.style.height = 'auto';
+          titleEl.style.height = titleEl.scrollHeight + 'px';
+        }
+        resizeTitle();
+
+        // slug 자동 생성 (새 포스트)
+        function toSlug(str) {
+          return str.toLowerCase()
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9-]/g, '')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        }
+
+        titleEl.addEventListener('input', () => {
+          resizeTitle();
+          markDirty();
+          if (isNewPost) {
+            const s = toSlug(titleEl.value) || 'untitled';
+            slugDisplay.textContent = s;
+            slugField.value = s;
+          }
+        });
+
+        draftCb.addEventListener('change', () => {
+          draftLabel.textContent = draftCb.checked ? 'Draft' : 'Published';
+          markDirty();
+        });
+
+        // 마크다운 미리보기
+        function renderPreview() {
+          const src = bodyEl.value;
+          if (!src.trim()) {
+            previewEl.innerHTML = '<p style="color:#333;font-size:0.8rem;">내용을 입력하면 미리보기가 표시됩니다.</p>';
+            return;
+          }
+          previewEl.innerHTML = mdRender.parse(src);
+        }
+
+        bodyEl.addEventListener('input', () => { renderPreview(); markDirty(); });
+
+        settingsBtn.addEventListener('click', () => settingsPanel.classList.toggle('open'));
+
+        // 초기 렌더링
+        renderPreview();
+
+        // Tab 들여쓰기
+        bodyEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Tab') {
+            e.preventDefault();
+            const s = bodyEl.selectionStart, en = bodyEl.selectionEnd;
+            bodyEl.value = bodyEl.value.substring(0, s) + '  ' + bodyEl.value.substring(en);
+            bodyEl.selectionStart = bodyEl.selectionEnd = s + 2;
+          }
+        });
+
+        // Ctrl+S
+        document.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            document.getElementById('post-form').submit();
+          }
+        });
+
+        document.getElementById('tags-input')?.addEventListener('input', markDirty);
+        document.getElementById('desc-input')?.addEventListener('input', markDirty);
+      }
+
+      // DOM 준비되면 실행
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initEditor);
+      } else {
+        initEditor();
+      }
+    </script>
+  </body>
+</html>

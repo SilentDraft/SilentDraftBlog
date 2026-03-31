@@ -1,0 +1,122 @@
+---
+export const prerender = false;
+
+const cookie = Astro.cookies.get("admin_token");
+if (cookie?.value && cookie.value === import.meta.env.ADMIN_TOKEN) {
+  return Astro.redirect("/admin/dashboard");
+}
+
+const error = Astro.url.searchParams.get("error");
+---
+
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Login</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: #0d0d0d;
+        color: #e5e5e5;
+        font-family: 'GeistMono', 'Courier New', monospace;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 380px;
+        padding: 2rem;
+        border: 1px solid #2a2a2a;
+        border-radius: 8px;
+        background: #111;
+      }
+
+      h1 {
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+        color: #22c55e;
+      }
+
+      p {
+        font-size: 0.8rem;
+        color: #888;
+        margin-bottom: 1.5rem;
+      }
+
+      .error {
+        font-size: 0.8rem;
+        color: #ef4444;
+        margin-bottom: 1rem;
+        padding: 0.5rem 0.75rem;
+        border: 1px solid #7f1d1d;
+        border-radius: 4px;
+        background: #1a0a0a;
+      }
+
+      label {
+        display: block;
+        font-size: 0.75rem;
+        color: #888;
+        margin-bottom: 0.4rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      input[type="password"] {
+        width: 100%;
+        padding: 0.6rem 0.75rem;
+        background: #0d0d0d;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        color: #e5e5e5;
+        font-family: inherit;
+        font-size: 0.9rem;
+        outline: none;
+        transition: border-color 0.15s;
+        margin-bottom: 1rem;
+      }
+
+      input[type="password"]:focus {
+        border-color: #22c55e;
+      }
+
+      button {
+        width: 100%;
+        padding: 0.6rem;
+        background: #22c55e;
+        color: #000;
+        border: none;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      button:hover {
+        background: #4ade80;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Admin</h1>
+      <p>토큰을 입력해 접근하세요.</p>
+
+      {error && <div class="error">잘못된 토큰입니다.</div>}
+
+      <form method="POST" action="/api/admin/login">
+        <label for="token">Token</label>
+        <input type="password" id="token" name="token" placeholder="••••••••" required autofocus />
+        <button type="submit">로그인</button>
+      </form>
+    </div>
+  </body>
+</html>

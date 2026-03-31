@@ -1,0 +1,225 @@
+---
+export const prerender = false;
+
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+
+const cookie = Astro.cookies.get("admin_token");
+if (!cookie?.value || cookie.value !== import.meta.env.ADMIN_TOKEN) {
+  return Astro.redirect("/admin");
+}
+
+const postsDir = join(process.cwd(), "src", "content", "posts");
+let posts: { slug: string; title: string; draft: boolean; createdAt: string; ext: string }[] = [];
+
+try {
+  const files = await readdir(postsDir);
+  posts = await Promise.all(
+    files
+      .filter((f) => f.endsWith(".md") || f.endsWith(".mdx"))
+      .map(async (filename) => {
+        const content = await readFile(join(postsDir, filename), "utf-8");
+        const titleMatch = content.match(/^title:\s*["']?(.*?)["']?\s*$/m);
+        const draftMatch = content.match(/^draft:\s*(.+?)\s*$/m);
+        const dateMatch = content.match(/^createdAt:\s*(.+?)\s*$/m);
+        const ext = filename.endsWith(".mdx") ? "mdx" : "md";
+        return {
+          slug: filename.replace(/\.(md|mdx)$/, ""),
+          title: titleMatch?.[1] ?? filename,
+          draft: draftMatch?.[1] === "true",
+          createdAt: dateMatch?.[1] ?? "",
+          ext,
+        };
+      })
+  );
+  posts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+} catch {
+  // posts dir doesn't exist yet
+}
+
+const error = Astro.url.searchParams.get("error");
+---
+
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin — Posts</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: #0d0d0d;
+        color: #e5e5e5;
+        font-family: 'GeistMono', 'Courier New', monospace;
+        min-height: 100vh;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 1.5rem;
+        height: 52px;
+        border-bottom: 1px solid #1e1e1e;
+        background: #111;
+      }
+
+      .logo { font-size: 0.9rem; color: #22c55e; font-weight: 600; }
+
+      .header-actions { display: flex; gap: 0.75rem; align-items: center; }
+
+      .btn {
+        padding: 0.35rem 0.85rem;
+        border-radius: 4px;
+        font-family: inherit;
+        font-size: 0.8rem;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s, color 0.15s;
+        border: none;
+      }
+
+      .btn-primary { background: #22c55e; color: #000; font-weight: 600; }
+      .btn-primary:hover { background: #4ade80; }
+      .btn-ghost { background: transparent; color: #888; border: 1px solid #2a2a2a; }
+      .btn-ghost:hover { color: #e5e5e5; border-color: #555; }
+
+      main { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+      .page-title {
+        font-size: 1rem;
+        color: #888;
+        margin-bottom: 1.5rem;
+      }
+
+      .error-notice {
+        padding: 0.5rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        color: #f87171;
+        border: 1px solid #7f1d1d;
+        background: #1a0a0a;
+        margin-bottom: 1rem;
+      }
+
+      table { width: 100%; border-collapse: collapse; }
+
+      th {
+        text-align: left;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #555;
+        border-bottom: 1px solid #1e1e1e;
+      }
+
+      td {
+        padding: 0.75rem;
+        border-bottom: 1px solid #1a1a1a;
+        font-size: 0.875rem;
+        vertical-align: middle;
+      }
+
+      tr:hover td { background: #151515; }
+
+      .post-title { color: #e5e5e5; font-weight: 500; }
+
+      .post-slug { color: #555; font-size: 0.75rem; }
+
+      .badge {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 3px;
+        font-size: 0.7rem;
+        font-weight: 500;
+      }
+
+      .badge-draft { background: #2a1a00; color: #f59e0b; border: 1px solid #78350f; }
+      .badge-published { background: #052e16; color: #4ade80; border: 1px solid #166534; }
+
+      .actions { display: flex; gap: 0.5rem; align-items: center; }
+
+      .action-link {
+        font-size: 0.75rem;
+        color: #555;
+        text-decoration: none;
+        padding: 0.2rem 0.5rem;
+        border-radius: 3px;
+        border: 1px solid transparent;
+        transition: all 0.15s;
+      }
+
+      .action-link:hover { color: #22c55e; border-color: #166534; }
+
+      .empty {
+        text-align: center;
+        padding: 4rem 0;
+        color: #444;
+        font-size: 0.875rem;
+      }
+
+      .date { color: #555; font-size: 0.75rem; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <span class="logo">Admin</span>
+      <div class="header-actions">
+        <a href="/admin/editor" class="btn btn-primary">+ 새 포스트</a>
+        <a href="/api/admin/logout" class="btn btn-ghost">로그아웃</a>
+      </div>
+    </header>
+
+    <main>
+      <p class="page-title">Posts ({posts.length})</p>
+
+      {error === "notfound" && (
+        <div class="error-notice">포스트를 찾을 수 없습니다.</div>
+      )}
+
+      {posts.length === 0 ? (
+        <div class="empty">
+          아직 포스트가 없습니다.<br />
+          <a href="/admin/editor" style="color: #22c55e; margin-top: 0.5rem; display: inline-block;">첫 포스트 작성하기 →</a>
+        </div>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>제목</th>
+              <th>상태</th>
+              <th>날짜</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {posts.map((post) => (
+              <tr>
+                <td>
+                  <div class="post-title">{post.title}</div>
+                  <div class="post-slug">{post.slug}.{post.ext}</div>
+                </td>
+                <td>
+                  {post.draft
+                    ? <span class="badge badge-draft">Draft</span>
+                    : <span class="badge badge-published">Published</span>
+                  }
+                </td>
+                <td><span class="date">{post.createdAt}</span></td>
+                <td>
+                  <div class="actions">
+                    <a href={`/admin/editor?slug=${post.slug}&ext=${post.ext}`} class="action-link">수정</a>
+                    <a href={`/blog/${post.slug}`} class="action-link" target="_blank">보기 ↗</a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </main>
+  </body>
+</html>
