@@ -92,7 +92,7 @@ function rehypeGithubAlerts() {
 // https://astro.build/config
 const config = defineConfig({
   site: "https://silentdraft.dev/blog",
-  output: "static",
+  output: "server",
   markdown: {
     rehypePlugins: [rehypeGithubAlerts],
   },
