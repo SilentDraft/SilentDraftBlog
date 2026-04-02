@@ -16,14 +16,5 @@
 		},
 		"text": "Email",
 		"link": "mailto:rlaxogh507906@gmail.com"
-	},
-	{
-		"id": 3,
-		"icon": {
-			"type": "lucide",
-			"name": "phone"
-		},
-		"text": "010-3347-5079",
-		"link": "tel:010-3347-5079"
 	}
 ]
