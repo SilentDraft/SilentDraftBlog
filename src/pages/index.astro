@@ -20,6 +20,10 @@ const [posts, projects, about, workExperience, quickInfo, socials] =
 	]);
 
 const { Content: About } = await render(about!);
+
+const currentYear = new Date().getFullYear();
+const age = currentYear - 2002 + 1;
+const devYear = currentYear - 2021 + 1;
 ---
 
 <Layout
@@ -49,7 +53,7 @@ const { Content: About } = await render(about!);
 								height={24}
 								class="glow-icon"
 							/>
-							<span>{info.data.text}</span>
+							<span>{info.data.text === "__AGE__" ? `${age} years old` : info.data.text === "__DEV_YEAR__" ? `${devYear}th year developer` : info.data.text}</span>
 						</li>
 					))
 				}
