@@ -7,6 +7,7 @@ import { isValidSlug, safePath, verifyToken } from "../../../lib/security";
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+	const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 	const cookie = cookies.get("admin_token");
 	if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
 		return new Response("Unauthorized", { status: 401 });
@@ -76,11 +77,11 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	} catch (err) {
 		console.error("Failed to save post:", err);
 		return redirect(
-			`/admin/editor?slug=${encodeURIComponent(slug)}&ext=${ext}&error=save_failed`,
+			`${base}/admin/editor?slug=${encodeURIComponent(slug)}&ext=${ext}&error=save_failed`,
 		);
 	}
 
 	return redirect(
-		`/admin/editor?slug=${encodeURIComponent(slug)}&ext=${ext}&saved=1`,
+		`${base}/admin/editor?slug=${encodeURIComponent(slug)}&ext=${ext}&saved=1`,
 	);
 };

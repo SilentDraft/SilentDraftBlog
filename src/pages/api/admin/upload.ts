@@ -6,6 +6,7 @@ import { safePath, verifyToken } from "../../../lib/security";
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+	const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 	const cookie = cookies.get("admin_token");
 	if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
 		return new Response("Unauthorized", { status: 401 });
@@ -15,12 +16,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	const file = formData.get("file");
 
 	if (!file || !(file instanceof File) || file.size === 0) {
-		return redirect("/admin/dashboard?error=empty");
+		return redirect(`${base}/admin/dashboard?error=empty`);
 	}
 
 	const filename = file.name;
 	if (!filename.endsWith(".md") && !filename.endsWith(".mdx")) {
-		return redirect("/admin/dashboard?error=type");
+		return redirect(`${base}/admin/dashboard?error=type`);
 	}
 
 	const postsDir = join(process.cwd(), "src", "content", "posts");
@@ -34,10 +35,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	try {
 		await writeFile(targetPath, content, "utf-8");
 	} catch {
-		return redirect("/admin/dashboard?error=write");
+		return redirect(`${base}/admin/dashboard?error=write`);
 	}
 
 	return redirect(
-		`/admin/dashboard?success=1&file=${encodeURIComponent(filename)}`,
+		`${base}/admin/dashboard?success=1&file=${encodeURIComponent(filename)}`,
 	);
 };

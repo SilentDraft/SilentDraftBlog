@@ -5,9 +5,10 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isValidSlug, safePath, verifyToken } from "../../lib/security";
 
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const cookie = Astro.cookies.get("admin_token");
 if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
-	return Astro.redirect("/admin");
+	return Astro.redirect(`${base}/admin`);
 }
 
 const slug = Astro.url.searchParams.get("slug") ?? "";
@@ -24,18 +25,18 @@ let initialBody = "";
 
 if (slug) {
 	if (!isValidSlug(slug)) {
-		return Astro.redirect("/admin/dashboard?error=invalid_slug");
+		return Astro.redirect(`${base}/admin/dashboard?error=invalid_slug`);
 	}
 	const postsDir = join(process.cwd(), "src", "content", "posts");
 	const filePath = safePath(postsDir, `${slug}.${ext}`);
 	if (!filePath) {
-		return Astro.redirect("/admin/dashboard?error=invalid_path");
+		return Astro.redirect(`${base}/admin/dashboard?error=invalid_path`);
 	}
 	let content = "";
 	try {
 		content = await readFile(filePath, "utf-8");
 	} catch {
-		return Astro.redirect("/admin/dashboard?error=notfound");
+		return Astro.redirect(`${base}/admin/dashboard?error=notfound`);
 	}
 
 	const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
@@ -415,14 +416,14 @@ const initialSlug = slug || makeSlug(initialTitle);
   </head>
   <body>
     <div class="app">
-      <form id="post-form" method="POST" action="/api/admin/save">
+      <form id="post-form" method="POST" action={`${base}/api/admin/save`}>
         <input type="hidden" name="original_slug" value={slug} />
         <input type="hidden" name="ext" value={ext} />
         <input type="hidden" name="created_at" value={createdAt} id="created-at-field" />
 
         <header>
           <div class="header-left">
-            <a href="/admin/dashboard" class="back-link">← 목록</a>
+            <a href={`${base}/admin/dashboard`} class="back-link">← 목록</a>
             <span class="divider">|</span>
             <div class="slug-wrap">
               <span class="slug-label">slug:</span>

@@ -1,9 +1,10 @@
 ---
 export const prerender = false;
 
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const cookie = Astro.cookies.get("admin_token");
 if (cookie?.value && cookie.value === import.meta.env.ADMIN_TOKEN) {
-	return Astro.redirect("/admin/dashboard");
+	return Astro.redirect(`${base}/admin/dashboard`);
 }
 
 const error = Astro.url.searchParams.get("error");
@@ -112,7 +113,7 @@ const error = Astro.url.searchParams.get("error");
 
       {error && <div class="error">잘못된 토큰입니다.</div>}
 
-      <form method="POST" action="/api/admin/login">
+      <form method="POST" action={`${base}/api/admin/login`}>
         <label for="token">Token</label>
         <input type="password" id="token" name="token" placeholder="••••••••" required autofocus />
         <button type="submit">로그인</button>

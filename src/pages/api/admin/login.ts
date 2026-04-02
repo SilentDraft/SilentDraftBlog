@@ -3,7 +3,8 @@ import { checkRateLimit, verifyToken } from "../../../lib/security";
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ request, cookies, redirect }) => {
+export const POST: APIRoute = async ({ request, cookies, redirect, url }) => {
+	const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 	const clientIp =
 		request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
 		request.headers.get("x-real-ip") ||
@@ -31,8 +32,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 			path: "/",
 			maxAge: 60 * 60 * 24,
 		});
-		return redirect("/admin/dashboard");
+		return redirect(`${base}/admin/dashboard`);
 	}
 
-	return redirect("/admin?error=invalid");
+	return redirect(`${base}/admin?error=invalid`);
 };

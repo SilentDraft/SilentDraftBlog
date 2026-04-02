@@ -6,8 +6,9 @@ import { join } from "node:path";
 import { verifyToken } from "../../lib/security";
 
 const cookie = Astro.cookies.get("admin_token");
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
-	return Astro.redirect("/admin");
+	return Astro.redirect(`${base}/admin`);
 }
 
 const postsDir = join(process.cwd(), "src", "content", "posts");
@@ -173,8 +174,8 @@ const error = Astro.url.searchParams.get("error");
     <header>
       <span class="logo">Admin</span>
       <div class="header-actions">
-        <a href="/admin/editor" class="btn btn-primary">+ 새 포스트</a>
-        <a href="/api/admin/logout" class="btn btn-ghost">로그아웃</a>
+        <a href={`${base}/admin/editor`} class="btn btn-primary">+ 새 포스트</a>
+        <a href={`${base}/api/admin/logout`} class="btn btn-ghost">로그아웃</a>
       </div>
     </header>
 
@@ -188,7 +189,7 @@ const error = Astro.url.searchParams.get("error");
       {posts.length === 0 ? (
         <div class="empty">
           아직 포스트가 없습니다.<br />
-          <a href="/admin/editor" style="color: #22c55e; margin-top: 0.5rem; display: inline-block;">첫 포스트 작성하기 →</a>
+          <a href={`${base}/admin/editor`} style="color: #22c55e; margin-top: 0.5rem; display: inline-block;">첫 포스트 작성하기 →</a>
         </div>
       ) : (
         <table>
@@ -216,8 +217,8 @@ const error = Astro.url.searchParams.get("error");
                 <td><span class="date">{post.createdAt}</span></td>
                 <td>
                   <div class="actions">
-                    <a href={`/admin/editor?slug=${post.slug}&ext=${post.ext}`} class="action-link">수정</a>
-                    <a href={`/blog/${post.slug}`} class="action-link" target="_blank">보기 ↗</a>
+                    <a href={`${base}/admin/editor?slug=${post.slug}&ext=${post.ext}`} class="action-link">수정</a>
+                    <a href={`${base}/blog/${post.slug}`} class="action-link" target="_blank">보기 ↗</a>
                   </div>
                 </td>
               </tr>
