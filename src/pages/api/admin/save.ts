@@ -36,7 +36,6 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 		return new Response("Invalid original slug", { status: 400 });
 	}
 
-	// Build tags YAML
 	const tags = tagsRaw
 		.split(",")
 		.map((t) => t.trim())
@@ -47,7 +46,6 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 			? `tags:\n${tags.map((t) => `  - ${t}`).join("\n")}`
 			: "tags: []";
 
-	// Build frontmatter
 	const frontmatterLines = [
 		`title: "${title.replace(/"/g, '\\"')}"`,
 		`description: "${description.replace(/"/g, '\\"')}"`,
@@ -67,7 +65,6 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	try {
 		await writeFile(newPath, content, "utf-8");
 
-		// If slug changed, delete old file
 		if (originalSlug && originalSlug !== slug) {
 			for (const oldExt of ["md", "mdx"]) {
 				const oldPath = safePath(postsDir, `${originalSlug}.${oldExt}`);

@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 			secure: import.meta.env.PROD,
 			sameSite: "strict",
 			path: "/",
-			maxAge: 60 * 60 * 24, // 24시간
+			maxAge: 60 * 60 * 24,
 		});
 		return redirect("/admin/dashboard");
 	}

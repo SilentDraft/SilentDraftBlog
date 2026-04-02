@@ -76,7 +76,6 @@ const path = Astro.url.pathname;
     searchElement.placeholder = '';
     results.classList.add('active');
     
-    // initialize pagefind on first focus
     if (!pagefindInitialized) {
       try {
         window.pagefind = await import("/pagefind/pagefind.js");
@@ -106,7 +105,6 @@ const path = Astro.url.pathname;
   });
 
   searchElement?.addEventListener('input', async (e) => {
-    // only search if Pagefind is ready
     if (!pagefindInitialized) {
       return;
     }
@@ -132,7 +130,6 @@ const path = Astro.url.pathname;
         h3.className = 'no-mt';
         h3.textContent = data.meta.title;
         const p = document.createElement('p');
-        // Pagefind excerpts contain <mark> tags for highlighting — allow only those
         const excerptText = data.excerpt || '';
         p.innerHTML = excerptText.replace(/<(?!\/?mark\b)[^>]*>/gi, '');
         link.append(h3, p);
