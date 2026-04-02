@@ -16,7 +16,7 @@ export const onRequest = defineMiddleware(async (_context, next) => {
 			"default-src 'self'",
 			"script-src 'self' 'unsafe-inline'",
 			"style-src 'self' 'unsafe-inline'",
-			"img-src 'self' data:",
+			"img-src 'self' data: https:",
 			"frame-src https://giscus.app",
 			"connect-src 'self' https://giscus.app",
 		].join("; "),
