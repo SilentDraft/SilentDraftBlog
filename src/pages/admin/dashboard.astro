@@ -3,38 +3,45 @@ export const prerender = false;
 
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { verifyToken } from "../../lib/security";
 
 const cookie = Astro.cookies.get("admin_token");
-if (!cookie?.value || cookie.value !== import.meta.env.ADMIN_TOKEN) {
-  return Astro.redirect("/admin");
+if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
+	return Astro.redirect("/admin");
 }
 
 const postsDir = join(process.cwd(), "src", "content", "posts");
-let posts: { slug: string; title: string; draft: boolean; createdAt: string; ext: string }[] = [];
+let posts: {
+	slug: string;
+	title: string;
+	draft: boolean;
+	createdAt: string;
+	ext: string;
+}[] = [];
 
 try {
-  const files = await readdir(postsDir);
-  posts = await Promise.all(
-    files
-      .filter((f) => f.endsWith(".md") || f.endsWith(".mdx"))
-      .map(async (filename) => {
-        const content = await readFile(join(postsDir, filename), "utf-8");
-        const titleMatch = content.match(/^title:\s*["']?(.*?)["']?\s*$/m);
-        const draftMatch = content.match(/^draft:\s*(.+?)\s*$/m);
-        const dateMatch = content.match(/^createdAt:\s*(.+?)\s*$/m);
-        const ext = filename.endsWith(".mdx") ? "mdx" : "md";
-        return {
-          slug: filename.replace(/\.(md|mdx)$/, ""),
-          title: titleMatch?.[1] ?? filename,
-          draft: draftMatch?.[1] === "true",
-          createdAt: dateMatch?.[1] ?? "",
-          ext,
-        };
-      })
-  );
-  posts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+	const files = await readdir(postsDir);
+	posts = await Promise.all(
+		files
+			.filter((f) => f.endsWith(".md") || f.endsWith(".mdx"))
+			.map(async (filename) => {
+				const content = await readFile(join(postsDir, filename), "utf-8");
+				const titleMatch = content.match(/^title:\s*["']?(.*?)["']?\s*$/m);
+				const draftMatch = content.match(/^draft:\s*(.+?)\s*$/m);
+				const dateMatch = content.match(/^createdAt:\s*(.+?)\s*$/m);
+				const ext = filename.endsWith(".mdx") ? "mdx" : "md";
+				return {
+					slug: filename.replace(/\.(md|mdx)$/, ""),
+					title: titleMatch?.[1] ?? filename,
+					draft: draftMatch?.[1] === "true",
+					createdAt: dateMatch?.[1] ?? "",
+					ext,
+				};
+			}),
+	);
+	posts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 } catch {
-  // posts dir doesn't exist yet
+	// posts dir doesn't exist yet
 }
 
 const error = Astro.url.searchParams.get("error");

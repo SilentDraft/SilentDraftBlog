@@ -112,29 +112,38 @@ const path = Astro.url.pathname;
     }
 
     results.innerHTML = '';
-    let searchResultHtml = '';
 
     const search = await window.pagefind.search(e.target.value);
 
-    let i = 0;
-    for (const result of search.results) {
-      i++;
-
-      const data = await result.data();
-      
-      searchResultHtml += `
-        <a href="${data.url}">
-          <h3 class="no-mt">${data.meta.title}</h3>
-          <p>${data.excerpt}</p>
-        </a>
-        ${i < search.results.length ? '<hr class="separator">' : ''}
-      `;
-    }
-
     if (search.results.length === 0 && e.target.value.length > 0) {
-      results.innerHTML = '<p style="margin-top: 0;">No results found</p>';
+      const noResults = document.createElement('p');
+      noResults.style.marginTop = '0';
+      noResults.textContent = 'No results found';
+      results.appendChild(noResults);
     } else {
-      results.innerHTML = searchResultHtml;
+      let i = 0;
+      for (const result of search.results) {
+        i++;
+        const data = await result.data();
+
+        const link = document.createElement('a');
+        link.href = data.url;
+        const h3 = document.createElement('h3');
+        h3.className = 'no-mt';
+        h3.textContent = data.meta.title;
+        const p = document.createElement('p');
+        // Pagefind excerpts contain <mark> tags for highlighting — allow only those
+        const excerptText = data.excerpt || '';
+        p.innerHTML = excerptText.replace(/<(?!\/?mark\b)[^>]*>/gi, '');
+        link.append(h3, p);
+        results.appendChild(link);
+
+        if (i < search.results.length) {
+          const hr = document.createElement('hr');
+          hr.className = 'separator';
+          results.appendChild(hr);
+        }
+      }
     }
 
     results.classList.add('active');

@@ -3,7 +3,7 @@ export const prerender = false;
 
 const cookie = Astro.cookies.get("admin_token");
 if (cookie?.value && cookie.value === import.meta.env.ADMIN_TOKEN) {
-  return Astro.redirect("/admin/dashboard");
+	return Astro.redirect("/admin/dashboard");
 }
 
 const error = Astro.url.searchParams.get("error");

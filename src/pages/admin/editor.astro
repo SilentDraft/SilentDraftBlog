@@ -3,10 +3,11 @@ export const prerender = false;
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { isValidSlug, safePath, verifyToken } from "../../lib/security";
 
 const cookie = Astro.cookies.get("admin_token");
-if (!cookie?.value || cookie.value !== import.meta.env.ADMIN_TOKEN) {
-  return Astro.redirect("/admin");
+if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
+	return Astro.redirect("/admin");
 }
 
 const slug = Astro.url.searchParams.get("slug") ?? "";
@@ -22,30 +23,40 @@ let initialCreatedAt = "";
 let initialBody = "";
 
 if (slug) {
-  const postsDir = join(process.cwd(), "src", "content", "posts");
-  let content = "";
-  try {
-    content = await readFile(join(postsDir, `${slug}.${ext}`), "utf-8");
-  } catch {
-    return Astro.redirect("/admin/dashboard?error=notfound");
-  }
+	if (!isValidSlug(slug)) {
+		return Astro.redirect("/admin/dashboard?error=invalid_slug");
+	}
+	const postsDir = join(process.cwd(), "src", "content", "posts");
+	const filePath = safePath(postsDir, `${slug}.${ext}`);
+	if (!filePath) {
+		return Astro.redirect("/admin/dashboard?error=invalid_path");
+	}
+	let content = "";
+	try {
+		content = await readFile(filePath, "utf-8");
+	} catch {
+		return Astro.redirect("/admin/dashboard?error=notfound");
+	}
 
-  const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (fmMatch) {
-    const fm = fmMatch[1];
-    initialBody = fmMatch[2].trimStart();
-    initialTitle = fm.match(/^title:\s*["']?(.*?)["']?\s*$/m)?.[1] ?? "";
-    initialDescription = fm.match(/^description:\s*["']?(.*?)["']?\s*$/m)?.[1] ?? "";
-    initialDraft = fm.match(/^draft:\s*(.+?)\s*$/m)?.[1] === "true";
-    initialCreatedAt = fm.match(/^createdAt:\s*(.+?)\s*$/m)?.[1] ?? "";
-    const tagsSection = fm.match(/^tags:\n((?:[ \t]+-[ \t]+.+\n?)+)/m);
-    if (tagsSection) {
-      const tagLines = tagsSection[1].match(/^[ \t]+-[ \t]+(.+)$/mg) ?? [];
-      initialTags = tagLines.map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim()).join(", ");
-    }
-  } else {
-    initialBody = content;
-  }
+	const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+	if (fmMatch) {
+		const fm = fmMatch[1];
+		initialBody = fmMatch[2].trimStart();
+		initialTitle = fm.match(/^title:\s*["']?(.*?)["']?\s*$/m)?.[1] ?? "";
+		initialDescription =
+			fm.match(/^description:\s*["']?(.*?)["']?\s*$/m)?.[1] ?? "";
+		initialDraft = fm.match(/^draft:\s*(.+?)\s*$/m)?.[1] === "true";
+		initialCreatedAt = fm.match(/^createdAt:\s*(.+?)\s*$/m)?.[1] ?? "";
+		const tagsSection = fm.match(/^tags:\n((?:[ \t]+-[ \t]+.+\n?)+)/m);
+		if (tagsSection) {
+			const tagLines = tagsSection[1].match(/^[ \t]+-[ \t]+(.+)$/gm) ?? [];
+			initialTags = tagLines
+				.map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim())
+				.join(", ");
+		}
+	} else {
+		initialBody = content;
+	}
 }
 
 const now = new Date();
@@ -55,7 +66,10 @@ const todayDate = `${mm}-${dd}-${now.getFullYear()}`;
 const createdAt = initialCreatedAt || todayDate;
 
 function makeSlug(title: string) {
-  return title.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+	return title
+		.toLowerCase()
+		.replace(/\s+/g, "-")
+		.replace(/[^a-z0-9-]/g, "");
 }
 
 const initialSlug = slug || makeSlug(initialTitle);
@@ -515,12 +529,20 @@ const initialSlug = slug || makeSlug(initialTitle);
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
+        function sanitizeUrl(url) {
+          const trimmed = url.trim().toLowerCase();
+          if (trimmed.startsWith('javascript:') || trimmed.startsWith('data:') || trimmed.startsWith('vbscript:')) {
+            return '#';
+          }
+          return url;
+        }
+
         function inline(s) {
           return s
             .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
-              `<img src="${src}" alt="${esc(alt)}" style="max-width:100%">`)
+              `<img src="${sanitizeUrl(src)}" alt="${esc(alt)}" style="max-width:100%">`)
             .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) =>
-              `<a href="${href}" target="_blank" rel="noopener">${text}</a>`)
+              `<a href="${sanitizeUrl(href)}" target="_blank" rel="noopener">${esc(text)}</a>`)
             .replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong><em>$1</em></strong>')
             .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
             .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')

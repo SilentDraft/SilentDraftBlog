@@ -56,8 +56,16 @@ let renderAttribsHTML =
 		? ""
 		: ' xmlns:xlink="http://www.w3.org/1999/xlink"';
 
+function escAttr(val: unknown): string {
+	return String(val)
+		.replace(/&/g, "&amp;")
+		.replace(/"/g, "&quot;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+}
+
 for (const attr in attributes) {
-	renderAttribsHTML += ` ${attr}="${attributes[attr]}"`;
+	renderAttribsHTML += ` ${attr}="${escAttr(attributes[attr])}"`;
 }
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg"${renderAttribsHTML}>${body}</svg>`;
