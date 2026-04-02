@@ -62,7 +62,7 @@ const { Content, headings } = await render(post);
 >
 	<div class="left" slot="left">
 		<Card class="toc-card">
-			<h2 class="no-mt">Table of contents</h2>
+			<h2 class="no-mt">목차</h2>
 			<ol>
 				<li class="toc-li">
 					<a href={"#_top"} class="active">{post.data.title}</a>
@@ -95,17 +95,15 @@ const { Content, headings } = await render(post);
 					<div class="article-info">
 						<span>{post.data.createdAt.toLocaleDateString()}</span>
 						<span>/</span>
-						<span
-							>{timeToRead(post)} minute{timeToRead(post) === 1 ? "" : "s"} to read</span
-						>
+						<span>{timeToRead(post)}분 소요</span>
 						<span>/</span>
-						<span>Tags: {post.data.tags.map((tag) => tag.id).join(", ")}</span>
+						<span>태그: {post.data.tags.map((tag) => tag.id).join(", ")}</span>
 					</div>
 				</div>
 			</div>
 			<Content />
 			<hr class="end-of-article" />
-			<a href="/blog" class="block-link" data-pagefind-ignore>← Back to blog</a>
+			<a href="/blog" class="block-link" data-pagefind-ignore>← 블로그로 돌아가기</a>
 		</Card>
 		{
 			giscus && (

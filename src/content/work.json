@@ -1,9 +1,16 @@
 [
 	{
 		"id": 1,
-		"duration": "2024 - present",
-		"company": "Astro Community",
-		"title": "Astro Theme",
-		"description": "Existing as an Astro theme for anyone to use."
+		"duration": "2021 - 2026",
+		"company": "배재대학교",
+		"title": "컴퓨터공학과",
+		"description": "2021년 입학, 2026년 2월 졸업."
+	},
+	{
+		"id": 2,
+		"duration": "2026 - 현재",
+		"company": "배재대학교 대학원",
+		"title": "석박사 통합과정",
+		"description": "컴퓨터공학 석박사 통합과정 재학 중."
 	}
 ]

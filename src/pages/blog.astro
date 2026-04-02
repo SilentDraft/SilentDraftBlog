@@ -17,7 +17,7 @@ const tags = posts.flatMap((post) => post.data.tags.map((tag) => tag.id));
 >
   <div class="layout-grid-left" slot="left">
     <Card class="flex-col-card">
-      <h2 class="no-mt">Filter</h2>
+      <h2 class="no-mt">필터</h2>
       <ul class="tags-list">
         {Array.from(new Set(tags)).map((tag) => (
           <li>

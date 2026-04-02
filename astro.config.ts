@@ -107,11 +107,11 @@ const config = defineConfig({
       openGraph: {
         home: {
           title: "SilentDraft",
-          description: "A minimalistic theme for Astro.",
+          description: "SilentDraft의 개발 블로그",
         },
         blog: {
           title: "Blog",
-          description: "News and guides for SilentDraft.",
+          description: "개발 관련 글과 가이드",
         },
         projects: {
           title: "Projects",
