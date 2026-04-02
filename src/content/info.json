@@ -1,26 +1,26 @@
 [
-	{
-		"id": 1,
-		"icon": {
-			"type": "lucide",
-			"name": "cake"
-		},
-		"text": "__AGE__"
-	},
-	{
-		"id": 2,
-		"icon": {
-			"type": "lucide",
-			"name": "code"
-		},
-		"text": "__DEV_YEAR__"
-	},
-	{
-		"id": 3,
-		"icon": {
-			"type": "lucide",
-			"name": "earth"
-		},
-		"text": "South Korea"
-	}
+  {
+    "id": 1,
+    "icon": {
+      "type": "lucide",
+      "name": "cake"
+    },
+    "text": "__AGE__"
+  },
+  {
+    "id": 2,
+    "icon": {
+      "type": "lucide",
+      "name": "code"
+    },
+    "text": "__DEV_YEAR__"
+  },
+  {
+    "id": 3,
+    "icon": {
+      "type": "lucide",
+      "name": "earth"
+    },
+    "text": "Republic of Korea"
+  }
 ]
