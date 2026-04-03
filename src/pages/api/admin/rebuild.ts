@@ -11,7 +11,7 @@ export const POST: APIRoute = async ({ cookies }) => {
 	}
 
 	exec(
-		"pnpm build --ignore-scripts && pm2 restart silentdraft-blog",
+		"pm2 stop silentdraft-blog && pnpm build --ignore-scripts && pm2 start silentdraft-blog",
 		{ cwd: import.meta.env.PROJECT_DIR },
 	);
 

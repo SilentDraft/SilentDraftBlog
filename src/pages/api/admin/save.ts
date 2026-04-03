@@ -82,7 +82,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 		);
 	}
 
-	exec("pnpm build --ignore-scripts && pm2 restart silentdraft-blog", {
+	exec("pm2 stop silentdraft-blog && pnpm build --ignore-scripts && pm2 start silentdraft-blog", {
 		cwd: import.meta.env.PROJECT_DIR,
 	});
 
