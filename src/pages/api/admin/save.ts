@@ -1,3 +1,4 @@
+import { exec } from "node:child_process";
 import { existsSync } from "node:fs";
 import { unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -80,6 +81,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 			`${base}/admin/editor?slug=${encodeURIComponent(slug)}&ext=${ext}&error=save_failed`,
 		);
 	}
+
+	exec("pnpm build --ignore-scripts && pm2 restart silentdraft-blog", {
+		cwd: import.meta.env.PROJECT_DIR,
+	});
 
 	return redirect(
 		`${base}/admin/editor?slug=${encodeURIComponent(slug)}&ext=${ext}&saved=1`,
