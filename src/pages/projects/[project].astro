@@ -1,14 +1,20 @@
 ---
 import "../../styles/article.css";
 import type { CollectionEntry } from "astro:content";
-import { getEntry, render } from "astro:content";
+import { getCollection, render } from "astro:content";
 import Card from "../../components/Card.astro";
 import Icon from "../../components/Icon.astro";
 import ImageGlow from "../../components/ImageGlow.astro";
 import Layout from "../../layouts/Layout.astro";
 
 const { project: projectId } = Astro.params;
-const project = await getEntry("projects", projectId!);
+const projects = await getCollection("projects");
+const project = projects.find(
+        (p) =>
+                p.id === projectId ||
+                p.filePath?.endsWith(`${projectId}.mdx`) ||
+                p.filePath?.endsWith(`${projectId}.md`),
+);
 
 if (!project) {
         return Astro.redirect("/404");
