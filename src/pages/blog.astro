@@ -1,14 +1,14 @@
 ---
 import "../styles/article-list.css";
 
-import { getCollection } from "astro:content";
 import { openGraph } from "spectre:globals";
 import Card from "../components/Card.astro";
 import Icon from "../components/Icon.astro";
 import Layout from "../layouts/Layout.astro";
+import { listPosts } from "../lib/db/repos/posts";
 
-const posts = await getCollection("posts", (post) => post.data.draft !== true);
-const tags = posts.flatMap((post) => post.data.tags.map((tag) => tag.id));
+const posts = await listPosts();
+const tags = posts.flatMap((post) => post.tags);
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 <Layout
@@ -41,13 +41,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 				<h2>Latest Posts</h2>
 			</div>
 			<div class="content-container">
-				{posts.sort((a, b) => b.data.createdAt.getTime() - a.data.createdAt.getTime()).map((post) => (
-					<a href={`${base}/blog/${post.id}`} class="post-container" data-tags={post.data.tags.map((tag) => tag.id).join(",")}>
+				{posts.map((post) => (
+					<a href={`${base}/blog/${post.slug}`} class="post-container" data-tags={post.tags.join(",")}>
 						<div class="post-header">
-							<h3>{post.data.title}</h3>
-							<span class="post-date">{post.data.createdAt.toLocaleDateString()}</span>
+							<h3>{post.title}</h3>
+							<span class="post-date">{post.createdAt.toLocaleDateString()}</span>
 						</div>
-						<span>{post.data.description}</span>
+						<span>{post.description}</span>
 					</a>
 				))}
 			</div>
@@ -64,7 +64,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   function updatePostsVisibility() {
     posts.forEach((post) => {
       const postTags = post.dataset.tags!.split(',');
-      // if there are selected tags and the post does not have all of them, hide the post
       if (selectedTags.size > 0 && ![...selectedTags].every((tag) => postTags.includes(tag))) {
         post.style.display = 'none';
       } else {
@@ -74,7 +73,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   }
 
   function updateURL() {
-    // create a "clean" URL for the current page before adding the new query parameters
     const newUrl = new URL(window.location.pathname, window.location.origin);
     if (selectedTags.size > 0) {
       newUrl.searchParams.set('tags', [...selectedTags].join(','));

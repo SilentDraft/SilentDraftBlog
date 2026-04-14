@@ -1,6 +1,9 @@
 # build output
 dist/
 
+# runtime uploads
+uploads/
+
 # generated types
 .astro/
 

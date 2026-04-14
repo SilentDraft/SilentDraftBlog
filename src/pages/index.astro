@@ -1,25 +1,33 @@
 ---
 import "../styles/index.css";
 
-import { getCollection, getEntry, render } from "astro:content";
 import { name, openGraph } from "spectre:globals";
 import ProfilePicture from "../assets/pfp.png";
 import Card from "../components/Card.astro";
 import Icon from "../components/Icon.astro";
 import ImageGlow from "../components/ImageGlow.astro";
 import Layout from "../layouts/Layout.astro";
+import {
+	getPage,
+	listQuickInfo,
+	listSocials,
+	listWorkExperience,
+} from "../lib/db/repos/misc";
+import { listPosts } from "../lib/db/repos/posts";
+import { listProjects } from "../lib/db/repos/projects";
+import { renderMarkdown } from "../lib/markdown";
 
 const [posts, projects, about, workExperience, quickInfo, socials] =
 	await Promise.all([
-		getCollection("posts", (post) => post.data.draft !== true),
-		getCollection("projects"),
-		getEntry("other", "about"),
-		getCollection("workExperience"),
-		getCollection("quickInfo"),
-		getCollection("socials"),
+		listPosts(),
+		listProjects(),
+		getPage("about"),
+		listWorkExperience(),
+		listQuickInfo(),
+		listSocials(),
 	]);
 
-const { Content: About } = await render(about!);
+const aboutHtml = about ? await renderMarkdown(about.body) : "";
 
 const currentYear = new Date().getFullYear();
 const age = currentYear - 2002 + 1;
@@ -48,13 +56,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 					quickInfo.map((info) => (
 						<li>
 							<Icon
-								type={info.data.icon.type}
-								name={info.data.icon.name as any}
+								type={info.icon.type}
+								name={info.icon.name as any}
 								width={24}
 								height={24}
 								class="glow-icon"
 							/>
-							<span>{info.data.text === "__AGE__" ? `${age} years old` : info.data.text === "__DEV_YEAR__" ? `${devYear}th year developer` : info.data.text}</span>
+							<span>{info.text === "__AGE__" ? `${age} years old` : info.text === "__DEV_YEAR__" ? `${devYear}th year developer` : info.text}</span>
 						</li>
 					))
 				}
@@ -66,15 +74,15 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 				{
 					socials.map((item) => (
 						<li>
-							<a href={item.data.link} class="socials-link">
+							<a href={item.link} class="socials-link">
 								<Icon
-									type={item.data.icon.type}
-									name={item.data.icon.name as any}
+									type={item.icon.type}
+									name={item.icon.name as any}
 									width={24}
 									height={24}
 									class="glow-icon"
 								/>
-								<span>{item.data.text}</span>
+								<span>{item.text}</span>
 							</a>
 						</li>
 					))
@@ -94,9 +102,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 				/>
 				<h2>About me</h2>
 			</div>
-			<div class="prose">
-				<About />
-			</div>
+			<div class="prose" set:html={aboutHtml} />
 		</Card>
 		<Card>
 			<div class="header-container">
@@ -111,22 +117,17 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 			</div>
 			<div class="content-container">
 				{
-					posts
-						.sort(
-							(a, b) => b.data.createdAt.getTime() - a.data.createdAt.getTime(),
-						)
-						.slice(0, 2)
-						.map((post) => (
-							<a href={`${base}/blog/${post.id}`} class="post-container">
-								<div class="post-header">
-									<h3>{post.data.title}</h3>
-									<span class="post-date">
-										{post.data.createdAt.toLocaleDateString()}
-									</span>
-								</div>
-								<span>{post.data.description}</span>
-							</a>
-						))
+					posts.slice(0, 2).map((post) => (
+						<a href={`${base}/blog/${post.slug}`} class="post-container">
+							<div class="post-header">
+								<h3>{post.title}</h3>
+								<span class="post-date">
+									{post.createdAt.toLocaleDateString()}
+								</span>
+							</div>
+							<span>{post.description}</span>
+						</a>
+					))
 				}
 			</div>
 		</Card>
@@ -143,20 +144,17 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 			</div>
 			<div class="content-container">
 				{
-					projects
-						.sort((a, b) => b.data.date.getTime() - a.data.date.getTime())
-						.slice(0, 2)
-						.map((project) => (
-							<a href={`${base}/projects/${project.id}`} class="post-container">
-								<div class="post-header">
-									<h3>{project.data.title}</h3>
-									<span class="post-date">
-										{project.data.date.toLocaleDateString()}
-									</span>
-								</div>
-								<span>{project.data.description}</span>
-							</a>
-						))
+					projects.slice(0, 2).map((project) => (
+						<a href={`${base}/projects/${project.slug}`} class="post-container">
+							<div class="post-header">
+								<h3>{project.title}</h3>
+								<span class="post-date">
+									{project.date.toLocaleDateString()}
+								</span>
+							</div>
+							<span>{project.description}</span>
+						</a>
+					))
 				}
 			</div>
 		</Card>
@@ -173,14 +171,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 			</div>
 			<div class="work-experience-container">
 				{
-					workExperience.reverse().map((entry) => (
+					workExperience.map((entry) => (
 						<div class="work-experience-entry">
 							<span class="work-experience-duration">
-								{entry.data.duration}
+								{entry.duration}
 							</span>
-							<h3 class="work-experience-company">{entry.data.company}</h3>
-							<span class="work-experience-role">{entry.data.title}</span>
-							<p class="work-experience-desc">{entry.data.description}</p>
+							<h3 class="work-experience-company">{entry.company}</h3>
+							<span class="work-experience-role">{entry.title}</span>
+							<p class="work-experience-desc">{entry.description}</p>
 						</div>
 					))
 				}

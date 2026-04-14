@@ -1,11 +1,22 @@
-import { exec } from "node:child_process";
-import { existsSync } from "node:fs";
-import { unlink, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { APIRoute } from "astro";
-import { isValidSlug, safePath, verifyToken } from "../../../lib/security";
+import {
+	deletePost,
+	getPostBySlug,
+	upsertPost,
+} from "../../../lib/db/repos/posts";
+import { isValidSlug, verifyToken } from "../../../lib/security";
 
 export const prerender = false;
+
+function parseDate(value: string): Date {
+	const mmddyyyy = value.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+	if (mmddyyyy) {
+		const [, mm, dd, yyyy] = mmddyyyy;
+		return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+	}
+	const d = new Date(value);
+	return Number.isNaN(d.getTime()) ? new Date() : d;
+}
 
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	const base = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -18,18 +29,13 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
 	const originalSlug = form.get("original_slug")?.toString().trim() ?? "";
 	const slug = form.get("slug")?.toString().trim() || "untitled";
-	const ext = form.get("ext")?.toString() === "mdx" ? "mdx" : "md";
 	const title = form.get("title")?.toString().trim() ?? "";
 	const description = form.get("description")?.toString().trim() ?? "";
 	const tagsRaw = form.get("tags")?.toString() ?? "";
 	const draft = form.get("draft") === "on";
-	const createdAt =
-		form.get("created_at")?.toString().trim() ||
-		(() => {
-			const n = new Date();
-			return `${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}-${n.getFullYear()}`;
-		})();
+	const createdAtRaw = form.get("created_at")?.toString().trim() ?? "";
 	const body = form.get("body")?.toString() ?? "";
+	const image = form.get("image_path")?.toString().trim() || null;
 
 	if (!isValidSlug(slug)) {
 		return new Response("Invalid slug", { status: 400 });
@@ -43,50 +49,30 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 		.map((t) => t.trim())
 		.filter(Boolean);
 
-	const tagsYaml =
-		tags.length > 0
-			? `tags:\n${tags.map((t) => `  - ${t}`).join("\n")}`
-			: "tags: []";
-
-	const frontmatterLines = [
-		`title: "${title.replace(/"/g, '\\"')}"`,
-		`description: "${description.replace(/"/g, '\\"')}"`,
-		`createdAt: ${createdAt}`,
-		`draft: ${draft}`,
-		tagsYaml,
-	].join("\n");
-
-	const content = `---\n${frontmatterLines}\n---\n\n${body}`;
-
-	const postsDir = join(process.cwd(), "src", "content", "posts");
-	const newPath = safePath(postsDir, `${slug}.${ext}`);
-	if (!newPath) {
-		return new Response("Invalid file path", { status: 400 });
-	}
+	const createdAt = createdAtRaw ? parseDate(createdAtRaw) : new Date();
 
 	try {
-		await writeFile(newPath, content, "utf-8");
+		const existing = await getPostBySlug(originalSlug || slug);
+		await upsertPost(slug, {
+			title,
+			description,
+			body,
+			tags,
+			image,
+			draft,
+			createdAt: existing?.createdAt ?? createdAt,
+			updatedAt: null,
+		});
 
 		if (originalSlug && originalSlug !== slug) {
-			for (const oldExt of ["md", "mdx"]) {
-				const oldPath = safePath(postsDir, `${originalSlug}.${oldExt}`);
-				if (oldPath && existsSync(oldPath) && oldPath !== newPath) {
-					await unlink(oldPath);
-				}
-			}
+			await deletePost(originalSlug);
 		}
 	} catch (err) {
 		console.error("Failed to save post:", err);
 		return redirect(
-			`${base}/admin/editor?slug=${encodeURIComponent(slug)}&ext=${ext}&error=save_failed`,
+			`${base}/admin/editor?slug=${encodeURIComponent(slug)}&error=save_failed`,
 		);
 	}
 
-	exec("nohup bash -c 'pm2 stop silentdraft-blog && pnpm build --ignore-scripts && pm2 start silentdraft-blog' > /dev/null 2>&1 &", {
-		cwd: import.meta.env.PROJECT_DIR,
-	});
-
-	return redirect(
-		`${base}/admin/editor?slug=${encodeURIComponent(slug)}&ext=${ext}&saved=1`,
-	);
+	return redirect(`${base}/admin/dashboard?saved=1`);
 };

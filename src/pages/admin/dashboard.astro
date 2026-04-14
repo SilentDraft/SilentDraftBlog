@@ -1,8 +1,7 @@
 ---
 export const prerender = false;
 
-import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { listPosts } from "../../lib/db/repos/posts";
 import { verifyToken } from "../../lib/security";
 
 const cookie = Astro.cookies.get("admin_token");
@@ -11,37 +10,7 @@ if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
 	return Astro.redirect(`${base}/admin`);
 }
 
-const postsDir = join(process.cwd(), "src", "content", "posts");
-let posts: {
-	slug: string;
-	title: string;
-	draft: boolean;
-	createdAt: string;
-	ext: string;
-}[] = [];
-
-try {
-	const files = await readdir(postsDir);
-	posts = await Promise.all(
-		files
-			.filter((f) => f.endsWith(".md") || f.endsWith(".mdx"))
-			.map(async (filename) => {
-				const content = await readFile(join(postsDir, filename), "utf-8");
-				const titleMatch = content.match(/^title:\s*["']?(.*?)["']?\s*$/m);
-				const draftMatch = content.match(/^draft:\s*(.+?)\s*$/m);
-				const dateMatch = content.match(/^createdAt:\s*(.+?)\s*$/m);
-				const ext = filename.endsWith(".mdx") ? "mdx" : "md";
-				return {
-					slug: filename.replace(/\.(md|mdx)$/, ""),
-					title: titleMatch?.[1] ?? filename,
-					draft: draftMatch?.[1] === "true",
-					createdAt: dateMatch?.[1] ?? "",
-					ext,
-				};
-			}),
-	);
-	posts.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-} catch {}
+const posts = await listPosts({ includeDrafts: true });
 
 const error = Astro.url.searchParams.get("error");
 ---
@@ -206,7 +175,7 @@ const error = Astro.url.searchParams.get("error");
               <tr>
                 <td>
                   <div class="post-title">{post.title}</div>
-                  <div class="post-slug">{post.slug}.{post.ext}</div>
+                  <div class="post-slug">{post.slug}</div>
                 </td>
                 <td>
                   {post.draft
@@ -214,10 +183,10 @@ const error = Astro.url.searchParams.get("error");
                     : <span class="badge badge-published">Published</span>
                   }
                 </td>
-                <td><span class="date">{post.createdAt}</span></td>
+                <td><span class="date">{post.createdAt.toLocaleDateString()}</span></td>
                 <td>
                   <div class="actions">
-                    <a href={`${base}/admin/editor?slug=${post.slug}&ext=${post.ext}`} class="action-link">수정</a>
+                    <a href={`${base}/admin/editor?slug=${post.slug}`} class="action-link">수정</a>
                     <a href={`${base}/blog/${post.slug}`} class="action-link" target="_blank">보기 ↗</a>
                   </div>
                 </td>

@@ -1,12 +1,25 @@
-import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { randomBytes } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { extname, join } from "node:path";
 import type { APIRoute } from "astro";
-import { safePath, verifyToken } from "../../../lib/security";
+import { insertImage } from "../../../lib/db/repos/misc";
+import { verifyToken } from "../../../lib/security";
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ request, cookies, redirect }) => {
-	const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const ALLOWED = new Set([
+	".png",
+	".jpg",
+	".jpeg",
+	".gif",
+	".webp",
+	".svg",
+	".avif",
+]);
+const MAX_SIZE = 10 * 1024 * 1024;
+const UPLOAD_DIR = join(process.cwd(), "uploads");
+
+export const POST: APIRoute = async ({ request, cookies }) => {
 	const cookie = cookies.get("admin_token");
 	if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
 		return new Response("Unauthorized", { status: 401 });
@@ -16,29 +29,42 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	const file = formData.get("file");
 
 	if (!file || !(file instanceof File) || file.size === 0) {
-		return redirect(`${base}/admin/dashboard?error=empty`);
+		return new Response(JSON.stringify({ error: "empty" }), {
+			status: 400,
+			headers: { "content-type": "application/json" },
+		});
+	}
+	if (file.size > MAX_SIZE) {
+		return new Response(JSON.stringify({ error: "too_large" }), {
+			status: 400,
+			headers: { "content-type": "application/json" },
+		});
 	}
 
-	const filename = file.name;
-	if (!filename.endsWith(".md") && !filename.endsWith(".mdx")) {
-		return redirect(`${base}/admin/dashboard?error=type`);
+	const ext = extname(file.name).toLowerCase();
+	if (!ALLOWED.has(ext)) {
+		return new Response(JSON.stringify({ error: "unsupported_type" }), {
+			status: 400,
+			headers: { "content-type": "application/json" },
+		});
 	}
 
-	const postsDir = join(process.cwd(), "src", "content", "posts");
-	const targetPath = safePath(postsDir, filename);
-	if (!targetPath) {
-		return new Response("Invalid filename", { status: 400 });
-	}
+	const safeName = `${Date.now()}-${randomBytes(6).toString("hex")}${ext}`;
+	await mkdir(UPLOAD_DIR, { recursive: true });
+	const buffer = Buffer.from(await file.arrayBuffer());
+	await writeFile(join(UPLOAD_DIR, safeName), buffer);
 
-	const content = await file.text();
+	const url = `/uploads/${safeName}`;
+	await insertImage({
+		filename: safeName,
+		url,
+		size: file.size,
+		mimeType: file.type || "application/octet-stream",
+		uploadedAt: new Date(),
+	});
 
-	try {
-		await writeFile(targetPath, content, "utf-8");
-	} catch {
-		return redirect(`${base}/admin/dashboard?error=write`);
-	}
-
-	return redirect(
-		`${base}/admin/dashboard?success=1&file=${encodeURIComponent(filename)}`,
-	);
+	return new Response(JSON.stringify({ url, filename: safeName }), {
+		status: 200,
+		headers: { "content-type": "application/json" },
+	});
 };

@@ -1,33 +1,30 @@
 ---
 import "../../styles/article.css";
-import { getCollection, render } from "astro:content";
+import "markdown-it-github-alerts/styles/github-base.css";
+import "markdown-it-github-alerts/styles/github-colors-dark-media.css";
 import Card from "../../components/Card.astro";
 import Icon from "../../components/Icon.astro";
-import ImageGlow from "../../components/ImageGlow.astro";
 import Layout from "../../layouts/Layout.astro";
+import { getProjectBySlug } from "../../lib/db/repos/projects";
+import { renderMarkdown } from "../../lib/markdown";
 
 const { project: projectId } = Astro.params;
-const projects = await getCollection("projects");
-const project = projects.find(
-        (p) =>
-                p.id === projectId ||
-                p.filePath?.endsWith(`${projectId}.mdx`) ||
-                p.filePath?.endsWith(`${projectId}.md`),
-);
+const found = projectId ? await getProjectBySlug(projectId) : null;
 
-if (!project) {
-        return Astro.redirect("/404");
+if (!found) {
+	return Astro.redirect("/404");
 }
 
-const { Content } = await render(project);
+const project = found;
+const html = await renderMarkdown(project.body);
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 <Layout
-        title={project.data.title}
-        description={project.data.description}
-        image={project.data.image}
+        title={project.title}
+        description={project.description}
+        image={project.image}
         article={{
-                createdAt: project.data.date,
+                createdAt: project.date,
         }}
 >
         <div class="left" slot="left">
@@ -35,7 +32,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
                         <h2 class="no-mt">정보</h2>
                         <ul class="overview-list">
                                 {
-                                        project.data.info.map((info) => {
+                                        project.info.map((info) => {
                                                 const Tag = info.link ? "a" : "div";
                                                 return (
                                                         <li>
@@ -60,25 +57,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
                 <Card>
                         <div class="article-header" id="_top" data-pagefind-ignore>
                                 {
-                                        project.data.image && (
-                                                <ImageGlow
-                                                        quality={100}
+                                        project.image && (
+                                                <img
                                                         class="article-image"
-                                                        src={project.data.image}
-                                                        alt={project.data.title}
+                                                        src={project.image}
+                                                        alt={project.title}
                                                 />
                                         )
                                 }
                                 <div class="header">
                                         <div>
-                                                <h1 class="no-mt article-h1">{project.data.title}</h1>
+                                                <h1 class="no-mt article-h1">{project.title}</h1>
                                         </div>
                                         <div class="article-info">
-                                                <span>{project.data.date.toLocaleDateString()}</span>
+                                                <span>{project.date.toLocaleDateString()}</span>
                                         </div>
                                 </div>
                         </div>
-                        <Content />
+                        <div set:html={html} />
                         <hr class="end-of-article" />
                         <a href={`${base}/projects`} class="block-link" data-pagefind-ignore
                                 >← 프로젝트로 돌아가기</a

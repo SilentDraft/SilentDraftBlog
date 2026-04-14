@@ -1,51 +1,47 @@
 ---
 import "../../styles/article.css";
+import "markdown-it-github-alerts/styles/github-base.css";
+import "markdown-it-github-alerts/styles/github-colors-dark-media.css";
 
-import type { CollectionEntry } from "astro:content";
-import { getCollection, render } from "astro:content";
 import { giscus } from "spectre:globals";
 import Card from "../../components/Card.astro";
-import ImageGlow from "../../components/ImageGlow.astro";
 import Layout from "../../layouts/Layout.astro";
+import { getPostBySlug } from "../../lib/db/repos/posts";
+import { renderMarkdownWithHeadings } from "../../lib/markdown";
 
-function timeToRead(post: CollectionEntry<"posts">): number {
-        const numWords = (post.body || "")
-                .replace(/.*\[(.*?)\].*/gm, "$1")
-                .replace(/```.*?```/gms, "")
-                .split(/\s+/).length;
-        const numImages = post.body?.match(/!\[/g)?.length || 0;
-        const numCodeblocks = post.body?.match(/```/g)?.length || 0;
-        return (
-                Math.ceil(numWords / 200) +
-                Math.ceil(numImages / 6) +
-                Math.ceil(numCodeblocks / 3)
-        );
+function timeToRead(body: string): number {
+	const numWords = body
+		.replace(/.*\[(.*?)\].*/gm, "$1")
+		.replace(/```.*?```/gms, "")
+		.split(/\s+/).length;
+	const numImages = body.match(/!\[/g)?.length || 0;
+	const numCodeblocks = body.match(/```/g)?.length || 0;
+	return (
+		Math.ceil(numWords / 200) +
+		Math.ceil(numImages / 6) +
+		Math.ceil(numCodeblocks / 3)
+	);
 }
 
 const { post: postId } = Astro.params;
-const posts = await getCollection("posts", (p) => p.data.draft !== true);
-const post = posts.find(
-        (p) =>
-                p.id === postId ||
-                p.filePath?.endsWith(`${postId}.mdx`) ||
-                p.filePath?.endsWith(`${postId}.md`),
-);
+const foundPost = postId ? await getPostBySlug(postId) : null;
 
-if (!post) {
-        return Astro.redirect("/404");
+if (!foundPost || foundPost.draft) {
+	return Astro.redirect("/404");
 }
 
-const { Content, headings } = await render(post);
+const post = foundPost;
+const { html, headings } = await renderMarkdownWithHeadings(post.body);
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 
 <Layout
-        title={post.data.title}
-        description={post.data.description}
-        image={post.data.image}
+        title={post.title}
+        description={post.description}
+        image={post.image ?? undefined}
         article={{
-                createdAt: post.data.createdAt,
-                updatedAt: post.data.updatedAt,
+                createdAt: post.createdAt,
+                updatedAt: post.updatedAt ?? undefined,
         }}
 >
         <div class="left" slot="left">
@@ -53,7 +49,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
                         <h2 class="no-mt">목차</h2>
                         <ol>
                                 <li class="toc-li">
-                                        <a href={"#_top"} class="active">{post.data.title}</a>
+                                        <a href={"#_top"} class="active">{post.title}</a>
                                 </li>
                                 {
                                         headings.map((heading) => (
@@ -68,28 +64,27 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
         <article slot="right" data-pagefind-body>
                 <Card>
                         <div class="article-header" id="_top" data-pagefind-ignore>
-                                {post.data.image && (
-                                        <ImageGlow
-                                                quality={100}
+                                {post.image && (
+                                        <img
                                                 class="article-image"
-                                                src={post.data.image}
-                                                alt={post.data.title}
+                                                src={post.image}
+                                                alt={post.title}
                                         />
                                 )}
                                 <div class="header">
                                         <div>
-                                                <h1 class="no-mt article-h1">{post.data.title}</h1>
+                                                <h1 class="no-mt article-h1">{post.title}</h1>
                                         </div>
                                         <div class="article-info">
-                                                <span>{post.data.createdAt.toLocaleDateString()}</span>
+                                                <span>{post.createdAt.toLocaleDateString()}</span>
                                                 <span>/</span>
-                                                <span>{timeToRead(post)}분 소요</span>
+                                                <span>{timeToRead(post.body)}분 소요</span>
                                                 <span>/</span>
-                                                <span>태그: {post.data.tags.map((tag) => tag.id).join(", ")}</span>
+                                                <span>태그: {post.tags.join(", ")}</span>
                                         </div>
                                 </div>
                         </div>
-                        <Content />
+                        <div set:html={html} />
                         <hr class="end-of-article" />
                         <a href={`${base}/blog`} class="block-link" data-pagefind-ignore>← 블로그로 돌아가기</a>
                 </Card>

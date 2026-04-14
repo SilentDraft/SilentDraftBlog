@@ -10,7 +10,7 @@ import Navbar from "../components/Navbar.astro";
 interface Props {
 	title: string;
 	description?: string;
-	image?: ImageMetadata;
+	image?: string;
 	pagefindIgnore?: boolean;
 	article?: {
 		createdAt: Date;
@@ -41,7 +41,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 		<meta name="og:title" content={title} />
 		{description && <meta name="og:description" content={description} />}
-		<meta name="og:image" content={image?.src || '/img/og.png'} />
+		<meta name="og:image" content={image || '/img/og.png'} />
 		<meta name="og:url" content={Astro.site} />
 		{!article && <meta name="og:type" content="website" />}
 		<meta name="og:locale" content="ko" />
@@ -63,7 +63,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 		)}
 		<meta name="twitter:title" content={title} />
 		{description && <meta name="twitter:description" content={description} />}
-		<meta name="twitter:image" content={image?.src || '/img/og.png'} />
+		<meta name="twitter:image" content={image || '/img/og.png'} />
 	</head>
 	<body>
 		<main data-pagefind-ignore={pagefindIgnore}>

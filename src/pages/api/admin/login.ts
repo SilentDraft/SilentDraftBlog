@@ -3,7 +3,7 @@ import { checkRateLimit, verifyToken } from "../../../lib/security";
 
 export const prerender = false;
 
-export const POST: APIRoute = async ({ request, cookies, redirect, url }) => {
+export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 	const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 	const clientIp =
 		request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||

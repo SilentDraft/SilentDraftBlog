@@ -1,9 +1,10 @@
 ---
 export const prerender = false;
 
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
-import { isValidSlug, safePath, verifyToken } from "../../lib/security";
+import "markdown-it-github-alerts/styles/github-base.css";
+import "markdown-it-github-alerts/styles/github-colors-dark-media.css";
+import { getPostBySlug } from "../../lib/db/repos/posts";
+import { isValidSlug, verifyToken } from "../../lib/security";
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 const cookie = Astro.cookies.get("admin_token");
@@ -12,8 +13,6 @@ if (!verifyToken(cookie?.value, import.meta.env.ADMIN_TOKEN)) {
 }
 
 const slug = Astro.url.searchParams.get("slug") ?? "";
-const ext = Astro.url.searchParams.get("ext") ?? "md";
-const saved = Astro.url.searchParams.get("saved") === "1";
 const saveError = Astro.url.searchParams.get("error");
 
 let initialTitle = "";
@@ -27,37 +26,18 @@ if (slug) {
 	if (!isValidSlug(slug)) {
 		return Astro.redirect(`${base}/admin/dashboard?error=invalid_slug`);
 	}
-	const postsDir = join(process.cwd(), "src", "content", "posts");
-	const filePath = safePath(postsDir, `${slug}.${ext}`);
-	if (!filePath) {
-		return Astro.redirect(`${base}/admin/dashboard?error=invalid_path`);
-	}
-	let content = "";
-	try {
-		content = await readFile(filePath, "utf-8");
-	} catch {
+	const post = await getPostBySlug(slug);
+	if (!post) {
 		return Astro.redirect(`${base}/admin/dashboard?error=notfound`);
 	}
-
-	const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-	if (fmMatch) {
-		const fm = fmMatch[1];
-		initialBody = fmMatch[2].trimStart();
-		initialTitle = fm.match(/^title:\s*["']?(.*?)["']?\s*$/m)?.[1] ?? "";
-		initialDescription =
-			fm.match(/^description:\s*["']?(.*?)["']?\s*$/m)?.[1] ?? "";
-		initialDraft = fm.match(/^draft:\s*(.+?)\s*$/m)?.[1] === "true";
-		initialCreatedAt = fm.match(/^createdAt:\s*(.+?)\s*$/m)?.[1] ?? "";
-		const tagsSection = fm.match(/^tags:\n((?:[ \t]+-[ \t]+.+\n?)+)/m);
-		if (tagsSection) {
-			const tagLines = tagsSection[1].match(/^[ \t]+-[ \t]+(.+)$/gm) ?? [];
-			initialTags = tagLines
-				.map((l) => l.replace(/^[ \t]+-[ \t]+/, "").trim())
-				.join(", ");
-		}
-	} else {
-		initialBody = content;
-	}
+	initialTitle = post.title;
+	initialDescription = post.description;
+	initialDraft = post.draft;
+	initialTags = post.tags.join(", ");
+	initialBody = post.body;
+	const mm = String(post.createdAt.getMonth() + 1).padStart(2, "0");
+	const dd = String(post.createdAt.getDate()).padStart(2, "0");
+	initialCreatedAt = `${mm}-${dd}-${post.createdAt.getFullYear()}`;
 }
 
 const now = new Date();
@@ -146,37 +126,18 @@ const initialSlug = slug || makeSlug(initialTitle);
 
       .header-right { display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0; }
 
-      .draft-toggle {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
+      .btn-draft {
+        padding: 0.4rem 0.85rem;
+        border-radius: 4px;
+        font-family: inherit;
         font-size: 0.8rem;
-        color: #888;
         cursor: pointer;
-        user-select: none;
+        background: transparent;
+        color: #f59e0b;
+        border: 1px solid #78350f;
+        transition: all 0.15s;
       }
-
-      .draft-toggle input { display: none; }
-
-      .toggle-track {
-        width: 32px; height: 18px;
-        background: #2a2a2a;
-        border-radius: 9px;
-        position: relative;
-        transition: background 0.2s;
-      }
-
-      .toggle-thumb {
-        width: 12px; height: 12px;
-        background: #555;
-        border-radius: 50%;
-        position: absolute;
-        top: 3px; left: 3px;
-        transition: all 0.2s;
-      }
-
-      .draft-toggle input:checked ~ .toggle-track { background: #78350f; }
-      .draft-toggle input:checked ~ .toggle-track .toggle-thumb { left: 17px; background: #f59e0b; }
+      .btn-draft:hover { background: #2a1a00; }
 
       .saved-badge {
         font-size: 0.75rem;
@@ -381,22 +342,22 @@ const initialSlug = slug || makeSlug(initialTitle);
         min-height: 100%;
       }
 
-      .preview-content h1 { font-size: 1.6em; color: #e5e5e5; margin-top: 1.5rem; margin-bottom: 0.5rem; }
-      .preview-content h2 { font-size: 1.3em; color: #e5e5e5; margin-top: 1.5rem; margin-bottom: 0.4rem; border-bottom: 1px solid #1e1e1e; padding-bottom: 0.3rem; }
-      .preview-content h3 { font-size: 1.1em; color: #e5e5e5; margin-top: 1.25rem; margin-bottom: 0.3rem; }
-      .preview-content p { margin-top: 0.75rem; }
-      .preview-content a { color: #4ade80; text-decoration: none; }
-      .preview-content a:hover { text-decoration: underline; }
-      .preview-content code { background: #1e1e1e; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.875em; color: #e5e5e5; }
-      .preview-content pre { background: #151515; border: 1px solid #1e1e1e; border-radius: 6px; padding: 1rem; overflow-x: auto; margin-top: 0.75rem; }
-      .preview-content pre code { background: none; padding: 0; }
-      .preview-content blockquote { border-left: 2px solid #22c55e; padding: 0.5rem 1rem; margin-left: 0; background: rgba(34,197,94,0.07); }
-      .preview-content ul, .preview-content ol { padding-left: 1.5rem; margin-top: 0.5rem; }
-      .preview-content li { margin-top: 0.25rem; }
-      .preview-content hr { border: none; height: 1px; background: #1e1e1e; margin: 1.5rem 0; }
-      .preview-content table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-      .preview-content th, .preview-content td { padding: 0.4rem 0.75rem; border: 1px solid #1e1e1e; }
-      .preview-content th { background: #151515; color: #e5e5e5; }
+      .preview-content :global(h1) { font-size: 1.6em; color: #e5e5e5; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+      .preview-content :global(h2) { font-size: 1.3em; color: #e5e5e5; margin-top: 1.5rem; margin-bottom: 0.4rem; border-bottom: 1px solid #1e1e1e; padding-bottom: 0.3rem; }
+      .preview-content :global(h3) { font-size: 1.1em; color: #e5e5e5; margin-top: 1.25rem; margin-bottom: 0.3rem; }
+      .preview-content :global(p) { margin-top: 0.75rem; }
+      .preview-content :global(a) { color: #4ade80; text-decoration: none; }
+      .preview-content :global(a:hover) { text-decoration: underline; }
+      .preview-content :global(code) { background: #1e1e1e; padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.875em; color: #e5e5e5; }
+      .preview-content :global(pre) { background: #151515; border: 1px solid #1e1e1e; border-radius: 6px; padding: 1rem; overflow-x: auto; margin-top: 0.75rem; }
+      .preview-content :global(pre code) { background: none; padding: 0; }
+      .preview-content :global(blockquote) { border-left: 2px solid #22c55e; padding: 0.5rem 1rem; margin-left: 0; background: rgba(34,197,94,0.07); }
+      .preview-content :global(ul), .preview-content :global(ol) { padding-left: 1.5rem; margin-top: 0.5rem; }
+      .preview-content :global(li) { margin-top: 0.25rem; }
+      .preview-content :global(hr) { border: none; height: 1px; background: #1e1e1e; margin: 1.5rem 0; }
+      .preview-content :global(table) { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+      .preview-content :global(th), .preview-content :global(td) { padding: 0.4rem 0.75rem; border: 1px solid #1e1e1e; }
+      .preview-content :global(th) { background: #151515; color: #e5e5e5; }
 
       .preview-empty {
         color: #333;
@@ -418,7 +379,6 @@ const initialSlug = slug || makeSlug(initialTitle);
     <div class="app">
       <form id="post-form" method="POST" action={`${base}/api/admin/save`}>
         <input type="hidden" name="original_slug" value={slug} />
-        <input type="hidden" name="ext" value={ext} />
         <input type="hidden" name="created_at" value={createdAt} id="created-at-field" />
 
         <header>
@@ -439,13 +399,10 @@ const initialSlug = slug || makeSlug(initialTitle);
 
             <button type="button" class="btn-settings" id="settings-btn">⚙</button>
 
-            <label class="draft-toggle" title="Draft로 저장">
-              <input type="checkbox" name="draft" id="draft-cb" checked={initialDraft} />
-              <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              <span id="draft-label">{initialDraft ? "Draft" : "Published"}</span>
-            </label>
+            <input type="hidden" name="draft" id="draft-field" value={initialDraft ? "on" : ""} />
 
-            <button type="submit" class="btn-save">저장하기</button>
+            <button type="submit" class="btn-draft" id="btn-draft">임시 저장</button>
+            <button type="submit" class="btn-save" id="btn-publish">출간하기</button>
           </div>
         </header>
 
@@ -517,156 +474,19 @@ const initialSlug = slug || makeSlug(initialTitle);
     </div>
 
     <script define:vars={{ isNewPost: !slug, currentSlug: initialSlug }}>
-      const mdRender = (() => {
-        function esc(s) {
-          return String(s)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        }
-
-        function sanitizeUrl(url) {
-          const trimmed = url.trim().toLowerCase();
-          if (trimmed.startsWith('javascript:') || trimmed.startsWith('data:') || trimmed.startsWith('vbscript:')) {
-            return '#';
+      const mdRender = {
+        async parse(src) {
+          const res = await fetch('/api/admin/preview', {
+            method: 'POST',
+            headers: { 'content-type': 'text/plain' },
+            body: src,
+          });
+          if (!res.ok) {
+            return '<p style="color:#f87171">미리보기 실패: ' + res.status + '</p>';
           }
-          return url;
-        }
-
-        function inline(s) {
-          return s
-            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
-              `<img src="${sanitizeUrl(src)}" alt="${esc(alt)}" style="max-width:100%">`)
-            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) =>
-              `<a href="${sanitizeUrl(href)}" target="_blank" rel="noopener">${esc(text)}</a>`)
-            .replace(/\*\*\*([^*\n]+)\*\*\*/g, '<strong><em>$1</em></strong>')
-            .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-            .replace(/__([^_\n]+)__/g, '<strong>$1</strong>')
-            .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
-            .replace(/_([^_\n]+)_/g, '<em>$1</em>')
-            .replace(/~~([^~\n]+)~~/g, '<del>$1</del>')
-            .replace(/`([^`]+)`/g, (_, c) => `<code>${esc(c)}</code>`);
-        }
-
-        const ALERTS = {
-          NOTE:      { color: '#58a6ff', border: '#1f6feb', icon: '💬' },
-          TIP:       { color: '#3fb950', border: '#238636', icon: '💡' },
-          IMPORTANT: { color: '#bc8cff', border: '#8957e5', icon: '🔔' },
-          WARNING:   { color: '#d29922', border: '#9e6a03', icon: '⚠️' },
-          CAUTION:   { color: '#f85149', border: '#da3633', icon: '🚨' },
-        };
-
-        function hexToRgb(hex) {
-          const n = parseInt(hex.replace('#',''), 16);
-          return [(n>>16)&255, (n>>8)&255, n&255].join(',');
-        }
-
-        function blocks(src) {
-          const lines = src.replace(/\r\n/g, '\n').split('\n');
-          const out = [];
-          let i = 0;
-          while (i < lines.length) {
-            const line = lines[i];
-            if (!line.trim()) { i++; continue; }
-
-            const fenceM = line.match(/^(`{3,}|~{3,})\s*(\w*)/);
-            if (fenceM) {
-              const fence = fenceM[1], lang = fenceM[2] || '';
-              const code = [];
-              i++;
-              while (i < lines.length && !lines[i].startsWith(fence)) {
-                code.push(esc(lines[i])); i++;
-              }
-              i++;
-              out.push(`<pre><code class="lang-${lang}">${code.join('\n')}</code></pre>`);
-              continue;
-            }
-
-            const hM = line.match(/^(#{1,6})\s+(.+)$/);
-
-            if (hM) {
-              const lvl = hM[1].length;
-              out.push(`<h${lvl}>${inline(hM[2])}</h${lvl}>`);
-              i++; continue;
-            }
-
-            if (/^(-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
-              out.push('<hr>'); i++; continue;
-            }
-
-            if (/^>\s?/.test(line)) {
-              const qLines = [];
-              while (i < lines.length && /^>\s?/.test(lines[i])) {
-                qLines.push(lines[i].replace(/^>\s?/, '')); i++;
-              }
-              const qText = qLines.join('\n');
-              const alertM = qText.match(/^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\n?([\s\S]*)$/i);
-              if (alertM) {
-                const type = alertM[1].toUpperCase();
-                const a = ALERTS[type];
-                const body = alertM[2].trim();
-                const bodyHtml = body ? (blocks(body) || `<p>${inline(body)}</p>`) : '';
-                out.push(
-                  `<div style="border-left:4px solid ${a.border};border-radius:0 6px 6px 0;padding:0.6rem 1rem;margin:1rem 0;background:rgba(${hexToRgb(a.border)},0.1)">` +
-                  `<div style="font-weight:700;color:${a.color};margin-bottom:0.3rem;font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em">${a.icon} ${type}</div>` +
-                  `<div style="color:#c5c5c5">${bodyHtml}</div>` +
-                  `</div>`
-                );
-              } else {
-                out.push(`<blockquote>${blocks(qText)}</blockquote>`);
-              }
-              continue;
-            }
-
-            if (/^[-*+]\s/.test(line)) {
-              const items = [];
-              while (i < lines.length && /^[-*+]\s/.test(lines[i])) {
-                items.push(`<li>${inline(lines[i].replace(/^[-*+]\s+/, ''))}</li>`); i++;
-              }
-              out.push(`<ul>${items.join('')}</ul>`); continue;
-            }
-
-            if (/^\d+\.\s/.test(line)) {
-              const items = [];
-              while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
-                items.push(`<li>${inline(lines[i].replace(/^\d+\.\s+/, ''))}</li>`); i++;
-              }
-              out.push(`<ol>${items.join('')}</ol>`); continue;
-            }
-
-            if (line.includes('|') && i + 1 < lines.length && /^[|\s:—-]+$/.test(lines[i+1])) {
-              const rows = [];
-              while (i < lines.length && lines[i].includes('|')) {
-                rows.push(lines[i].replace(/^\||\|$/g,'').split('|').map(c => c.trim())); i++;
-              }
-              if (rows.length >= 2) {
-                const head = rows[0].map(h => `<th>${inline(h)}</th>`).join('');
-                const body = rows.slice(2).map(r =>
-                  '<tr>' + r.map(c => `<td>${inline(c)}</td>`).join('') + '</tr>'
-                ).join('');
-                out.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`);
-              }
-              continue;
-            }
-
-            const pLines = [];
-            while (i < lines.length && lines[i].trim() &&
-                   !/^#{1,6}\s/.test(lines[i]) &&
-                   !/^>\s?/.test(lines[i]) &&
-                   !/^(`{3,}|~{3,})/.test(lines[i]) &&
-                   !/^[-*+]\s/.test(lines[i]) &&
-                   !/^\d+\.\s/.test(lines[i]) &&
-                   !/^(-{3,}|\*{3,}|_{3,})$/.test(lines[i].trim())) {
-              pLines.push(lines[i]); i++;
-            }
-            if (pLines.length) {
-              out.push(`<p>${inline(pLines.join('\n').replace(/\n/g, '<br>'))}</p>`);
-            }
-          }
-          return out.join('');
-        }
-
-        return { parse: blocks };
-      })();
+          return await res.text();
+        },
+      };
 
       function initEditor() {
         const titleEl    = document.getElementById('title-input');
@@ -674,8 +494,9 @@ const initialSlug = slug || makeSlug(initialTitle);
         const previewEl  = document.getElementById('preview-content');
         const slugDisplay = document.getElementById('slug-display');
         const slugField   = document.getElementById('slug-field');
-        const draftCb    = document.getElementById('draft-cb');
-        const draftLabel = document.getElementById('draft-label');
+        const draftField = document.getElementById('draft-field');
+        const btnDraft   = document.getElementById('btn-draft');
+        const btnPublish = document.getElementById('btn-publish');
         const savedBadge = document.getElementById('saved-badge');
         const unsavedDot = document.getElementById('unsaved-dot');
         const settingsBtn  = document.getElementById('settings-btn');
@@ -719,21 +540,28 @@ const initialSlug = slug || makeSlug(initialTitle);
           }
         });
 
-        draftCb.addEventListener('change', () => {
-          draftLabel.textContent = draftCb.checked ? 'Draft' : 'Published';
-          markDirty();
-        });
+        btnDraft.addEventListener('click', () => { draftField.value = 'on'; });
+        btnPublish.addEventListener('click', () => { draftField.value = ''; });
 
-        function renderPreview() {
+        let previewTimer = null;
+        let previewToken = 0;
+        async function renderPreview() {
           const src = bodyEl.value;
           if (!src.trim()) {
             previewEl.innerHTML = '<p style="color:#333;font-size:0.8rem;">내용을 입력하면 미리보기가 표시됩니다.</p>';
             return;
           }
-          previewEl.innerHTML = mdRender.parse(src);
+          const myToken = ++previewToken;
+          const html = await mdRender.parse(src);
+          if (myToken !== previewToken) return;
+          previewEl.innerHTML = html;
+        }
+        function schedulePreview() {
+          if (previewTimer) clearTimeout(previewTimer);
+          previewTimer = setTimeout(renderPreview, 250);
         }
 
-        bodyEl.addEventListener('input', () => { renderPreview(); markDirty(); });
+        bodyEl.addEventListener('input', () => { schedulePreview(); markDirty(); });
 
         settingsBtn.addEventListener('click', () => settingsPanel.classList.toggle('open'));
 

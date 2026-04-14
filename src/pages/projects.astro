@@ -1,13 +1,13 @@
 ---
 import "../styles/article-list.css";
 
-import { getCollection } from "astro:content";
 import { openGraph } from "spectre:globals";
 import Card from "../components/Card.astro";
 import Icon from "../components/Icon.astro";
 import Layout from "../layouts/Layout.astro";
+import { listProjects } from "../lib/db/repos/projects";
 
-const projects = await getCollection("projects");
+const projects = await listProjects();
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 ---
 <Layout
@@ -33,13 +33,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 				<h2>Latest Projects</h2>
 			</div>
 			<div class="content-container">
-				{projects.sort((a, b) => b.data.date.getTime() - a.data.date.getTime()).map((post) => (
-					<a href={`${base}/projects/${post.id}`} class="post-container">
+				{projects.map((p) => (
+					<a href={`${base}/projects/${p.slug}`} class="post-container">
 						<div class="post-header">
-							<h3>{post.data.title}</h3>
-							<span class="post-date">{post.data.date.toLocaleDateString()}</span>
+							<h3>{p.title}</h3>
+							<span class="post-date">{p.date.toLocaleDateString()}</span>
 						</div>
-						<span>{post.data.description}</span>
+						<span>{p.description}</span>
 					</a>
 				))}
 			</div>
